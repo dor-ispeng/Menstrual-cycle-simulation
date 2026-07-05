@@ -1,0 +1,1017 @@
+'use client'
+
+import { motion } from 'framer-motion'
+import CorpusLuteumRosette from './CorpusLuteumRosette'
+
+// ── Canvas: 1400 × 900 ──────────────────────────────────────────────────────
+// Composition (left→right):
+//   Uterus  : complete pear-oval, fully within canvas (left edge x≈30)
+//   Tube    : thick stroke sweeping from uterus upper-right → top-right → curls
+//             back left, fimbriae end at ~(1110,618) facing the ovary
+//   Ovary   : organic oval at (880,630), rx=185, ry=150
+//   Follicles / dominant / corpus luteum: all inside ovary
+//   Egg     : travels from dominant follicle to fimbriae opening, then up tube
+
+// ── Uterus ───────────────────────────────────────────────────────────────────
+
+// Approximate centroid of the cavity shape — used as transform-origin for the
+// endometrium rim scale so the rim stays visually uniform on all sides.
+const UTERUS_CX = 295
+const UTERUS_CY = 490
+
+// Outer myometrium wall — complete pear-oval, leftmost x≈30, fully within canvas.
+// Right side and tube-connection point (590,215) are unchanged.
+const UTERUS_OUTER =
+  'M 590,215 ' +
+  'C 645,255 665,355 665,470 ' +
+  'C 665,585 645,695 590,755 ' +
+  'C 500,835 360,875 220,875 ' +
+  'C 60,875 30,660 30,470 ' +
+  'C 30,280 60,65 220,65 ' +
+  'C 360,65 500,135 590,215 Z'
+
+// Uterine cavity — inner space enclosed by the myometrium.
+// Left side shifted to x≈120 to maintain ~90 px of wall on the left
+// (matching the right-side wall of 665−478 = 187 px proportionally).
+// Right side, top, and bottom segments are unchanged.
+const UTERUS_CAVITY =
+  'M 420,255 ' +
+  'C 458,278 478,360 478,458 ' +
+  'C 478,572 438,662 378,712 ' +
+  'C 318,758 234,772 170,748 ' +
+  'C 130,735 120,612 120,480 ' +
+  'C 120,340 130,240 170,217 ' +
+  'C 234,202 392,232 420,255 Z'
+
+// Endometrial lining — same shape, animated scale from uterus centre
+const ENDO_PATH = UTERUS_CAVITY
+const ENDO_ORIGIN = `${UTERUS_CX}px ${UTERUS_CY}px`
+
+// ── Fallopian tube ────────────────────────────────────────────────────────────
+
+// Four-segment cubic bezier: exits uterus upper-right, arcs across the top,
+// curves down-right, then curls back left toward the ovary
+const TUBE_PATH =
+  'M 580,290 ' +
+  'C 660,210 780,148 920,133 ' +
+  'C 1058,118 1200,168 1285,268 ' +
+  'C 1345,342 1360,432 1325,508 ' +
+  'C 1288,588 1198,628 1110,618'
+
+// Fimbriae — five finger projections from tube end (1110,618) curving toward
+// the RIGHT SURFACE of the ovary.  Tips are verified to be outside the new
+// ovary boundary (center 830,630; rx≈185, ry≈150; right edge x≈1015).
+// A visible 15–55 px gap separates each tip from the ovary surface.
+const FIMBRIAE = [
+  'M 1110,618 C 1095,595 1055,535 1010,525',  // upper   — tip (1010,525)
+  'M 1110,618 C 1092,604 1060,568 1025,568',  // mid-top  — tip (1025,568)
+  'M 1110,618 C 1085,618 1065,628 1032,630',  // center   — tip (1032,630)
+  'M 1110,618 C 1092,632 1060,668 1025,685',  // mid-bot  — tip (1025,685)
+  'M 1110,618 C 1095,645 1055,695 1010,710',  // lower    — tip (1010,710)
+]
+
+// ── Ovary ─────────────────────────────────────────────────────────────────────
+
+// Bezier-approximated ellipse (rx=185, ry=150, Bézier factor ≈ 0.5523)
+// Shifted 50 px left from the original (880,630) centre so the right edge
+// sits at x≈1015, giving a clear anatomical gap to the tube end at (1110,618).
+const OVARY_PATH =
+  'M 830,480 ' +
+  'C 932,480 1015,547 1015,630 ' +
+  'C 1015,713 932,780 830,780 ' +
+  'C 728,780 645,713 645,630 ' +
+  'C 645,547 728,480 830,480 Z'
+
+// ── Follicle layout ───────────────────────────────────────────────────────────
+//
+// Index 0 is the persistent dominant candidate.  It is always rendered and
+// grows from BASE_R to MAX_DOM_R as dominantFollicleRadius increases.
+// Indices 1–11 are recruited antral follicles; each regresses when
+// smallFollicleCount drops below its array index (see render logic below).
+//
+// All positions shifted 50 px left to match the new ovary centre (830,630).
+// Each point has ≥40 px clearance from the ovary boundary.
+
+const FOLLICLE_POSITIONS: [number, number][] = [
+  [845, 615],  // [0] dominant candidate — grows with dominantFollicleRadius
+  [790, 545], [845, 540], [920, 555],  // upper scatter
+  [960, 615], [940, 670], [880, 700],  // right / lower-right scatter
+  [775, 680], [750, 620],              // left scatter
+  [810, 595], [905, 595], [850, 670],  // inner scatter
+]
+
+const DOMINANT_IDX = 0   // index of the persistent dominant candidate
+const BASE_R       = 18  // resting radius — matches the follic1.svg "cycle-end" scale
+const RECRUITED_R  = 27  // radius once FSH drives recruitment — matches follic2.svg scale
+const MAX_DOM_R    = 72  // peak dominant follicle radius (~28 % smaller than before)
+const CL_PEAK_R    = 62  // corpus luteum at maturity (slightly less than max follicle)
+
+// ── Per-follicle variation table ─────────────────────────────────────────────
+// 5 "painting personalities" — cycled through by follicle index.
+// Each entry shifts the specular reflection, the broad ambient highlight,
+// adds a unique tonal brushmark, and places an edge-irregularity mark at a
+// different angle around the rim.  Together they ensure no two follicles look
+// like the same stamp while staying within the same illustrated style.
+//
+//  sX / sY   : specular highlight centre offset (× RECRUITED_R)
+//  aOffY     : Blob-A vertical centre offset (negative = above follicle centre)
+//  aA        : Blob-A opacity
+//  mX / mY   : unique tonal mark centre (× R)
+//  mRX / mRY : unique tonal mark radii (× R)
+//  mA / mF   : mark opacity / fill colour
+//  sBoost    : extra follicleShadeGrad pass for heavier-shadow follicles
+//  eX / eY   : edge-irregularity mark position (× R, sits at ~0.87 R from centre)
+const FOLLICLE_VARIATIONS = [
+  { sX: -0.12, sY: -0.16, aOffY: -0.28, aA: 0.26, mX:  0.42, mY: -0.55, mRX: 0.18, mRY: 0.12, mA: 0.09, mF: '#E8A0AA', sBoost: 0,    eX:  0.21, eY: -0.79 },
+  { sX: -0.07, sY: -0.22, aOffY: -0.34, aA: 0.31, mX: -0.50, mY:  0.36, mRX: 0.22, mRY: 0.13, mA: 0.07, mF: '#F4BCBC', sBoost: 0.04, eX:  0.79, eY: -0.21 },
+  { sX: -0.17, sY: -0.11, aOffY: -0.23, aA: 0.21, mX:  0.14, mY:  0.64, mRX: 0.16, mRY: 0.11, mA: 0.11, mF: '#E09098', sBoost: 0.02, eX:  0.41, eY:  0.71 },
+  { sX: -0.10, sY: -0.20, aOffY: -0.32, aA: 0.29, mX: -0.30, mY: -0.42, mRX: 0.21, mRY: 0.13, mA: 0.08, mF: '#EAB0B6', sBoost: 0.06, eX: -0.71, eY:  0.41 },
+  { sX: -0.15, sY: -0.13, aOffY: -0.26, aA: 0.23, mX:  0.52, mY:  0.20, mRX: 0.19, mRY: 0.12, mA: 0.10, mF: '#E898A6', sBoost: 0.03, eX: -0.53, eY: -0.63 },
+] as const
+
+// ── Egg travel: arc-length parameterized along the fallopian tube ────────────
+// Pre-sampled once at module load. No DOM or ref needed.
+//
+// The egg follows: dominant follicle (895,615)
+//   → fimbriae opening (1110,618)   [linear approach, T_APPROACH fraction]
+//   → along reversed tube beziers   [arc-length parameterized]
+//   → uterine junction (580,290)
+
+type Pt2 = [number, number]
+
+function evalCubic(u: number, p0: Pt2, p1: Pt2, p2: Pt2, p3: Pt2): Pt2 {
+  const m = 1 - u
+  return [
+    m*m*m*p0[0] + 3*m*m*u*p1[0] + 3*m*u*u*p2[0] + u*u*u*p3[0],
+    m*m*m*p0[1] + 3*m*m*u*p1[1] + 3*m*u*u*p2[1] + u*u*u*p3[1],
+  ]
+}
+
+// Reversed fallopian tube segments (fimbriae end → uterine end).
+// Each entry reverses one segment of TUBE_PATH: swap P0↔P3, swap P1↔P2.
+const EGG_TUBE_SEGS: [Pt2, Pt2, Pt2, Pt2][] = [
+  [[1110,618],[1198,628],[1288,588],[1325,508]],  // rev seg4
+  [[1325,508],[1360,432],[1345,342],[1285,268]],  // rev seg3
+  [[1285,268],[1200,168],[1058,118],[920,133]],   // rev seg2
+  [[920,133], [780,148], [660,210], [580,290]],   // rev seg1
+]
+
+// d attribute for the invisible SVG guide path (matches EGG_TUBE_SEGS)
+const EGG_GUIDE_D =
+  'M 1110,618 C 1198,628 1288,588 1325,508 ' +
+  'C 1360,432 1345,342 1285,268 ' +
+  'C 1200,168 1058,118 920,133 ' +
+  'C 780,148 660,210 580,290'
+
+// Build arc-length table — 25 uniform samples per segment
+const _N = 25
+const _tubePts: Pt2[] = []
+for (const [p0, p1, p2, p3] of EGG_TUBE_SEGS) {
+  for (let k = 0; k < _N; k++) {
+    _tubePts.push(evalCubic(k / _N, p0, p1, p2, p3))
+  }
+}
+_tubePts.push([580, 290])
+
+const _arcs: number[] = [0]
+for (let i = 1; i < _tubePts.length; i++) {
+  const a = _tubePts[i - 1]!
+  const b = _tubePts[i]!
+  _arcs.push(_arcs[i - 1]! + Math.hypot(b[0] - a[0], b[1] - a[1]))
+}
+const _totalLen = _arcs[_arcs.length - 1]!
+
+function sampleTube(frac: number): Pt2 {
+  const target = Math.max(0, Math.min(1, frac)) * _totalLen
+  for (let i = 1; i < _arcs.length; i++) {
+    if (_arcs[i]! >= target) {
+      const span = _arcs[i]! - _arcs[i - 1]!
+      const u = span > 0 ? (target - _arcs[i - 1]!) / span : 0
+      const a = _tubePts[i - 1]!
+      const b = _tubePts[i]!
+      return [a[0] + u * (b[0] - a[0]), a[1] + u * (b[1] - a[1])]
+    }
+  }
+  return _tubePts[_tubePts.length - 1]!
+}
+
+// Fraction of eggProgress (0–1) used for the follicle→fimbriae approach
+const T_APPROACH = 0.18
+
+function eggPosition(t: number): Pt2 {
+  if (t <= T_APPROACH) {
+    const frac = t / T_APPROACH
+    // dominant follicle is at FOLLICLE_POSITIONS[DOMINANT_IDX] = (845, 615)
+    return [845 + (1110 - 845) * frac, 615 + (618 - 615) * frac]
+  }
+  return sampleTube((t - T_APPROACH) / (1 - T_APPROACH))
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+type Props = {
+  smallFollicleCount: number
+  dominantFollicleRadius: number  // 0–1
+  corpusLuteumRadius: number      // 0–1
+  eggProgress: number             // –1=hidden, 0=just released, 1=in tube
+  endometriumThickness: number    // 0–1
+  fshLevel: number                // 0–1 — drives follicle glow response
+  lhLevel: number                 // 0–1 — drives dominant follicle activation ring
+  progesteroneLevel: number       // 0–1 — drives endometrium secretory response
+  zoomLevel?: number
+  onStructureClick: (id: string) => void
+}
+
+
+// Corpus luteum corp1→corp2→corp3 rendering lives in CorpusLuteumRosette.tsx,
+// traced from SVG/corp1.svg, SVG/corp2.svg and SVG/corp3.svg.
+//
+// Maps eggProgress (monotonic from Ovulation Decision through Continue/Restart)
+// to a single 0→2 stage value: 0 = corp1 fully formed (Ovulation Decision),
+// 1 = corp2 fully formed (After Release), 2 = corp3 fully formed (Preparation).
+// corp1 holds until halfway to After Release, then morphs into corp2, reaching
+// full form exactly at After Release. corp2 holds until a bit before halfway
+// to Preparation, then morphs into corp3, reaching full form exactly at
+// Preparation — and stays there (eggProgress keeps rising monotonically, so
+// nothing reverts after Preparation).
+function corpusStageFromEggProgress(eggProgress: number): number {
+  const HOLD1_END  = 0.10  // halfway between Ovulation Decision (0) and After Release (0.20)
+  const MORPH1_END = 0.20  // After Release hard stop — corp2 fully formed
+  const HOLD2_END  = 0.40  // a bit before halfway between After Release (0.20) and Preparation (0.70)
+  const MORPH2_END = 0.70  // Preparation hard stop — corp3 fully formed
+
+  if (eggProgress <= HOLD1_END) return 0
+  if (eggProgress <= MORPH1_END) return (eggProgress - HOLD1_END) / (MORPH1_END - HOLD1_END)
+  if (eggProgress <= HOLD2_END) return 1
+  if (eggProgress <= MORPH2_END) return 1 + (eggProgress - HOLD2_END) / (MORPH2_END - HOLD2_END)
+  return 2
+}
+
+export default function AnatomyLayer({
+  smallFollicleCount,
+  dominantFollicleRadius,
+  corpusLuteumRadius,
+  eggProgress,
+  endometriumThickness,
+  fshLevel,
+  lhLevel,
+  progesteroneLevel,
+  zoomLevel = 1,
+  onStructureClick,
+}: Props) {
+  const eggVisible = eggProgress >= 0
+
+  // Scale of the inner cavity mask that sits on top of the endometrium fill.
+  // Smaller scale = thicker endometrium rim visible around it.
+  // Range: ~0.85 (thin, early cycle) → ~0.55 (thick, secretory phase)
+  const innerCavityScale = 0.96 - endometriumThickness * 0.43
+
+  // ── Persistent dominant structure: follicle → ruptured follicle → CL ────
+  // One SVG element lives here through the entire lifecycle.
+  // Nothing is deleted or created; only r, fill, and stroke morph.
+  const isPreOvulation = eggProgress < 0
+  const tEgg = Math.max(0, Math.min(1, eggProgress))        // 0→1 after egg release
+  const tCL  = Math.max(0, Math.min(1, corpusLuteumRadius)) // 0→1 CL maturity
+
+  // Radius: grows as dominant, collapses on rupture, re-expands as CL
+  let structR: number
+  if (isPreOvulation) {
+    structR = Math.max(BASE_R, dominantFollicleRadius * MAX_DOM_R)
+  } else {
+    const collapseT = Math.min(1, tEgg * 5)               // collapses in first 20 % of egg travel
+    const rupturedR = MAX_DOM_R * (1 - 0.28 * collapseT)  // 72 → ~52 px
+    structR         = rupturedR + (CL_PEAK_R - rupturedR) * tCL  // ~52 → 62 px as CL matures
+  }
+
+  // Corpus luteum evolution — corp1 (Ovulation Decision) → corp2 (After
+  // Release) → corp3 (Preparation), rendered by CorpusLuteumRosette as one
+  // continuously-morphing structure. See corpusStageFromEggProgress above.
+  const corpusStageT = isPreOvulation ? 0 : corpusStageFromEggProgress(eggProgress)
+
+  const showGranulosa = zoomLevel >= 2.5 && structR > 20 && isPreOvulation
+
+  // Dominant follicle visual evolution across competition→dominant→ovulation-decision stages.
+  // follic3T: fades in the antral follicle look (granulosa wall ring + bump ring) starting
+  //           a bit after competition (DR=0.63) and reaching full appearance by early dominant (DR=0.77).
+  // follic5T: fades in the Graafian follicle look (expanded antrum, cumulus oophorus) starting
+  //           a bit after dominant peak (DR=0.88) and fully developed before ovulation decision (DR=0.97).
+  const follic3T = isPreOvulation ? Math.min(1, Math.max(0, (dominantFollicleRadius - 0.63) / 0.14)) : 0
+  // follic5T also fades out as eggProgress approaches 0, so the Graafian look collapses
+  // before the actual rupture (starts fading at eP=-0.03, gone by eP=0).
+  const follic5T = isPreOvulation
+    ? Math.min(1, Math.max(0, (dominantFollicleRadius - 0.88) / 0.09)) * (eggProgress < -0.03 ? 1 : Math.max(0, -eggProgress / 0.03))
+    : 0
+
+  const [domFX, domFY] = FOLLICLE_POSITIONS[DOMINANT_IDX]
+
+  return (
+    <g>
+
+      {/* Follicle glyph gradients — warm-shifted to sit cohesively on the ovary PNG.
+          Hues align with the ovary's painted salmon-rose palette; the organic
+          blob layers below replace any procedural noise. */}
+      <defs>
+        {/* Outer membrane: #FFCECE mid-tone, lit upper-left.
+            Extra stops at 20 % and 54 % create a non-monotonic dip then lift — the
+            gradient no longer eases perfectly, giving a painted rather than rendered look. */}
+        <radialGradient id="follicleOuterGrad" cx="33%" cy="25%" r="71%">
+          <stop offset="0%"   stopColor="#FFE8E8" />
+          <stop offset="20%"  stopColor="#FFD8DA" />
+          <stop offset="36%"  stopColor="#FFCECE" />
+          <stop offset="54%"  stopColor="#F8C4C8" />
+          <stop offset="70%"  stopColor="#EAA8B0" />
+          <stop offset="84%"  stopColor="#E29AA4" />
+          <stop offset="100%" stopColor="#C87888" />
+        </radialGradient>
+        {/* Antrum ring: now near-white (#FEF2F2 mid-tone) — colors swapped with core.
+            Stop positions and gradient shape unchanged; only the colour palette swapped. */}
+        <radialGradient id="follicleRingGrad" cx="35%" cy="29%" r="68%">
+          <stop offset="0%"   stopColor="#FFFFFF" />
+          <stop offset="26%"  stopColor="#FFF0F0" />
+          <stop offset="45%"  stopColor="#FFE4E4" />
+          <stop offset="62%"  stopColor="#FFE0E0" />
+          <stop offset="80%"  stopColor="#FADDDD" />
+          <stop offset="92%"  stopColor="#F6D2D2" />
+          <stop offset="100%" stopColor="#F0CCCC" />
+        </radialGradient>
+        {/* Fluid core: now medium pink (#FAB0B0 mid-tone) — colors swapped with ring.
+            Stop positions and gradient shape unchanged; only the colour palette swapped. */}
+        <radialGradient id="follicleCoreGrad" cx="38%" cy="32%" r="63%">
+          <stop offset="0%"   stopColor="#FDD0D0" />
+          <stop offset="28%"  stopColor="#FCC4C4" />
+          <stop offset="52%"  stopColor="#FAB0B0" />
+          <stop offset="70%"  stopColor="#F4A8A8" />
+          <stop offset="88%"  stopColor="#EC9898" />
+          <stop offset="100%" stopColor="#E89090" />
+        </radialGradient>
+        {/* Shadow crescent: slight opacity plateau at 28 % — pigment pooling effect */}
+        <radialGradient id="follicleShadeGrad" cx="66%" cy="71%" r="61%">
+          <stop offset="0%"   stopColor="#8A3040" stopOpacity="0.17" />
+          <stop offset="28%"  stopColor="#8A3040" stopOpacity="0.13" />
+          <stop offset="52%"  stopColor="#8A3040" stopOpacity="0.06" />
+          <stop offset="72%"  stopColor="#8A3040" stopOpacity="0.03" />
+          <stop offset="100%" stopColor="#8A3040" stopOpacity="0.01" />
+        </radialGradient>
+        {/* Rim/crevice shadow: non-monotonic — rises to 0.13 at 84 %, dips to 0.08 at 90 %,
+            then to 0.20 at edge.  The dip creates a subtle inner light ring before the
+            outer dark band, mimicking how brush edges feather on rough paper/tissue. */}
+        <radialGradient id="follicleRimGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%"   stopColor="#7A2838" stopOpacity="0" />
+          <stop offset="60%"  stopColor="#7A2838" stopOpacity="0" />
+          <stop offset="74%"  stopColor="#7A2838" stopOpacity="0.04" />
+          <stop offset="84%"  stopColor="#7A2838" stopOpacity="0.13" />
+          <stop offset="90%"  stopColor="#7A2838" stopOpacity="0.08" />
+          <stop offset="100%" stopColor="#7A2838" stopOpacity="0.20" />
+        </radialGradient>
+        {/* Egg outer: lit upper-left, rosy at edge */}
+        <radialGradient id="eggOuterGrad" cx="33%" cy="25%" r="71%">
+          <stop offset="0%"   stopColor="#FEFCFC" />
+          <stop offset="25%"  stopColor="#FFF4F4" />
+          <stop offset="50%"  stopColor="#FFE4E4" />
+          <stop offset="72%"  stopColor="#F8D0D0" />
+          <stop offset="88%"  stopColor="#F0BCBC" />
+          <stop offset="100%" stopColor="#E8A8A8" />
+        </radialGradient>
+      </defs>
+      {/* Corp1/corp2/corp3 gradients now live inside CorpusLuteumRosette,
+          which blends its own stop colours by stageT instead of using
+          separate static gradients per stage. */}
+
+      {/* ── FallopianTubeGroup — drawn first so uterus + ovary paint on top ── */}
+      <g id="FallopianTubeGroup">
+        {/* PNG illustration — white background removed.
+            Scale 0.65× (998×666) keeps the native 1536×1024 ratio.
+            x=420 positions fimbriae (left edge at 58.5 % of width) flush with
+            the ovary right edge (SVG x≈1003).  Arch apex stays at SVG y=133. */}
+        <image
+          href="/tube.png"
+          x={420} y={62}
+          width={998} height={666}
+          style={{ cursor: 'pointer' }}
+          onClick={() => onStructureClick('fallopian-tube')}
+        />
+        {/* Invisible thick-stroke click target along the original centreline */}
+        <path
+          d={TUBE_PATH}
+          fill="none"
+          stroke="transparent"
+          strokeWidth="80"
+          strokeLinecap="round"
+          style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
+          onClick={() => onStructureClick('fallopian-tube')}
+        />
+        {/* Label — sits in the upper section of the tube arc */}
+        <text
+          x="1020" y="128"
+          textAnchor="middle"
+          fontSize="17"
+          fill="#f5cdd4"
+          fontFamily="sans-serif"
+          transform="rotate(-5,1020,128)"
+          opacity={0.80}
+          style={{ pointerEvents: 'none', userSelect: 'none' }}
+        >
+          Fallopian tube
+        </text>
+      </g>
+
+      {/* ── OvaryGroup — rendered before UterusGroup so the uterus paints ──
+           over the ovary stem, hiding it behind the uterus wall.          */}
+      <g id="OvaryGroup">
+        <image
+          href="/ovary.png"
+          x={504} y={395}
+          width={588} height={471}
+          style={{ cursor: 'pointer' }}
+          onClick={() => onStructureClick('ovary')}
+        />
+        {/* Invisible boundary path — preserves the precise elliptical click target */}
+        <path
+          d={OVARY_PATH}
+          fill="transparent"
+          style={{ cursor: 'pointer', pointerEvents: 'fill' }}
+          onClick={() => onStructureClick('ovary')}
+        />
+      </g>
+
+      {/* ── UterusGroup ───────────────────────────────────────────────────── */}
+      <g id="UterusGroup">
+        {/* Myometrium outer wall */}
+        <path
+          d={UTERUS_OUTER}
+          fill="#7a3040"
+          style={{ cursor: 'pointer' }}
+          onClick={() => onStructureClick('uterus')}
+        />
+        {/*
+          Endometrium — rendered as a rim that lines the uterine cavity wall.
+
+          Three layers, back to front:
+          1. Endometrium fill: UTERUS_CAVITY at full size, in endometrium colour.
+             This is the "wall lining" layer.
+          2. Secretory-phase overlay: same shape, slightly darker, opacity driven
+             by progesterone level — simulates glandular engorgement.
+          3. Inner cavity mask: UTERUS_CAVITY scaled down, in cavity colour.
+             Covers the central space, leaving only the rim visible as endometrium.
+             A smaller scale = thicker visible rim = thicker endometrium.
+        */}
+
+        {/* Layer 1 — endometrium fill (full cavity area, endometrium colour) */}
+        <path
+          d={UTERUS_CAVITY}
+          fill="#d85070"
+          style={{ cursor: 'pointer' }}
+          onClick={() => onStructureClick('endometrium')}
+        />
+
+        {/* Layer 2 — secretory-phase darkening driven by progesterone */}
+        <motion.path
+          d={UTERUS_CAVITY}
+          fill="#a03050"
+          style={{ pointerEvents: 'none' }}
+          initial={{ opacity: 0 }}
+          animate={{
+            opacity: Math.min(0.48, Math.max(0, (progesteroneLevel - 0.15) / 0.65)),
+          }}
+          transition={{ duration: 0.6 }}
+        />
+
+        {/* Layer 3 — inner cavity mask (shrinks as endometrium thickens) */}
+        <motion.path
+          d={UTERUS_CAVITY}
+          fill="#f5cdd4"
+          style={{ transformOrigin: ENDO_ORIGIN, pointerEvents: 'none' }}
+          animate={{ scale: innerCavityScale }}
+          transition={{ duration: 0.5 }}
+        />
+        {/* Label in the fundus (top wall) area */}
+        <text
+          x="155" y="195"
+          textAnchor="middle"
+          fontSize="19"
+          fill="#f5cdd4"
+          fontFamily="sans-serif"
+          opacity={0.70}
+          style={{ pointerEvents: 'none', userSelect: 'none' }}
+        >
+          Uterus
+        </text>
+      </g>
+
+      {/*
+        FSH follicle-stimulation glow.
+        Each visible follicle emits a soft yellow halo when FSH is active,
+        visually showing that FSH is the cause of follicle growth.
+        Rendered between OvaryGroup and FolliclesGroup so glows sit behind
+        the follicle circles.
+      */}
+      {fshLevel > 0.12 && (
+        <g id="FSHGlowGroup" style={{ pointerEvents: 'none' }}>
+          {FOLLICLE_POSITIONS.map(([fx, fy], i) => {
+            if (i === DOMINANT_IDX) {
+              if (!isPreOvulation || dominantFollicleRadius < 0.06) return null
+              const gr = structR + 7
+              return (
+                <motion.circle key="fsh-glow-dom" cx={fx} cy={fy} r={gr}
+                  fill="rgba(154,138,200,0.22)"
+                  stroke="rgba(154,138,200,0.42)" strokeWidth={1.5}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: Math.min(0.85, fshLevel * 0.95) }}
+                  transition={{ duration: 0.5 }}
+                />
+              )
+            }
+            const fraction = Math.min(1, Math.max(0, smallFollicleCount - i))
+            if (fraction < 0.12) return null
+            // Follicles swell from the follic1.svg scale toward the larger
+            // follic2.svg scale as FSH rises through recruitment — the glow
+            // ring tracks the same growth so it always sits just outside
+            // the visible follicle body.
+            const growT   = Math.min(1, Math.max(0, (fshLevel - 0.3) / 0.7))
+            const targetR = BASE_R + (RECRUITED_R - BASE_R) * growT
+            return (
+              <motion.circle key={`fsh-glow-${i}`} cx={fx} cy={fy} r={targetR * fraction + 5}
+                fill="rgba(154,138,200,0.18)"
+                stroke="rgba(154,138,200,0.36)" strokeWidth={1.5}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: Math.min(0.80, fshLevel * 0.88) }}
+                transition={{ duration: 0.5 }}
+              />
+            )
+          })}
+        </g>
+      )}
+
+      {/* ── FolliclesGroup ────────────────────────────────────────────────── */}
+      <g id="FolliclesGroup">
+        {/*
+          Non-dominant recruited follicles (indices 1–11): regress via atresia.
+
+          Visual style matches the follic1.svg ("cycle-end") / follic2.svg
+          ("recruitment") reference illustrations — a pale outer membrane,
+          a darker antrum ring, and a bright specular core. Each follicle is
+          drawn once at the larger RECRUITED_R geometry and uniformly scaled,
+          so the outer body, ring, and highlight stay proportional and in
+          lock-step as the follicle grows or regresses — giving a continuous
+          biological transformation rather than a swap between two images.
+        */}
+        {FOLLICLE_POSITIONS.map(([fx, fy], i) => {
+          if (i === DOMINANT_IDX) return null  // dominant handled separately below
+
+          const fraction = Math.min(1, Math.max(0, smallFollicleCount - i))
+          if (fraction < 0.02) return null
+
+          // FSH-driven growth: follic1 scale (BASE_R) at cycle-end →
+          // follic2 scale (RECRUITED_R) once FSH rises through recruitment.
+          const growT   = Math.min(1, Math.max(0, (fshLevel - 0.3) / 0.7))
+          const targetR = BASE_R + (RECRUITED_R - BASE_R) * growT
+          const scale   = (targetR / RECRUITED_R) * fraction
+
+          if (scale < 0.03) return null
+
+          // Pick this follicle's painting personality (cycles every 5)
+          const v = FOLLICLE_VARIATIONS[i % FOLLICLE_VARIATIONS.length]
+
+          return (
+            <motion.g
+              key={`follicle-${i}`}
+              style={{ cursor: 'pointer', transformOrigin: `${fx}px ${fy}px` }}
+              onClick={() => onStructureClick('follicle')}
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale, opacity: fraction }}
+              transition={{ duration: 0.5 }}
+            >
+              {/* 1 · Outer membrane */}
+              <circle cx={fx} cy={fy} r={RECRUITED_R} fill="url(#follicleOuterGrad)" />
+              {/* 2 · Shadow crescent */}
+              <circle cx={fx} cy={fy} r={RECRUITED_R} fill="url(#follicleShadeGrad)" />
+              {/* Per-follicle shadow weight — some follicles carry heavier pigment */}
+              {v.sBoost > 0 && (
+                <circle cx={fx} cy={fy} r={RECRUITED_R}
+                  fill="url(#follicleShadeGrad)" opacity={v.sBoost} />
+              )}
+              {/* 3 · Crevice / rim shadow */}
+              <circle cx={fx} cy={fy} r={RECRUITED_R} fill="url(#follicleRimGrad)" />
+
+              {/* ── Organic texture blobs ── */}
+
+              {/* A · Ambient highlight wash — vertical centre varies per follicle,
+                      shifting where the broad light falls across the membrane */}
+              <ellipse
+                cx={fx - RECRUITED_R * 0.08} cy={fy + RECRUITED_R * v.aOffY}
+                rx={RECRUITED_R * 0.68} ry={RECRUITED_R * 0.44}
+                fill="#FFEAEC" opacity={v.aA}
+              />
+              {/* B · Right-centre warming tone */}
+              <ellipse
+                cx={fx + RECRUITED_R * 0.32} cy={fy + RECRUITED_R * 0.06}
+                rx={RECRUITED_R * 0.32} ry={RECRUITED_R * 0.50}
+                fill="#E5ACBA" opacity={0.09}
+                transform={`rotate(-22,${fx + RECRUITED_R * 0.32},${fy + RECRUITED_R * 0.06})`}
+              />
+              {/* C · Lower form shadow */}
+              <ellipse
+                cx={fx + RECRUITED_R * 0.10} cy={fy + RECRUITED_R * 0.52}
+                rx={RECRUITED_R * 0.50} ry={RECRUITED_R * 0.26}
+                fill="#C07888" opacity={0.10}
+              />
+              {/* D · Left subsurface scatter */}
+              <ellipse
+                cx={fx - RECRUITED_R * 0.26} cy={fy - RECRUITED_R * 0.12}
+                rx={RECRUITED_R * 0.28} ry={RECRUITED_R * 0.42}
+                fill="#FFF0F2" opacity={0.28}
+                transform={`rotate(8,${fx - RECRUITED_R * 0.26},${fy - RECRUITED_R * 0.12})`}
+              />
+
+              {/* Unique tonal mark — a single brushstroke placed at a different
+                  position for each personality so no two follicles share the same
+                  tonal arrangement */}
+              <ellipse
+                cx={fx + RECRUITED_R * v.mX} cy={fy + RECRUITED_R * v.mY}
+                rx={RECRUITED_R * v.mRX} ry={RECRUITED_R * v.mRY}
+                fill={v.mF} opacity={v.mA}
+              />
+
+              {/* Edge irregularity — subtle dark ellipse near the rim at a unique
+                  angle, breaking the optically perfect circle silhouette */}
+              <ellipse
+                cx={fx + RECRUITED_R * v.eX} cy={fy + RECRUITED_R * v.eY}
+                rx={RECRUITED_R * 0.14} ry={RECRUITED_R * 0.11}
+                fill="#C07888" opacity={0.10}
+              />
+
+              {/* ── Outer-ring surface bumps ── */}
+              <ellipse cx={fx + RECRUITED_R * 0.02} cy={fy - RECRUITED_R * 0.78}
+                rx={RECRUITED_R * 0.13} ry={RECRUITED_R * 0.11} fill="#FFE8EC" opacity={0.27} />
+              <ellipse cx={fx + RECRUITED_R * 0.56} cy={fy - RECRUITED_R * 0.50}
+                rx={RECRUITED_R * 0.11} ry={RECRUITED_R * 0.09} fill="#FFE0E8" opacity={0.21} />
+              <ellipse cx={fx + RECRUITED_R * 0.76} cy={fy + RECRUITED_R * 0.20}
+                rx={RECRUITED_R * 0.12} ry={RECRUITED_R * 0.10} fill="#F8CCCC" opacity={0.18} />
+              <ellipse cx={fx - RECRUITED_R * 0.36} cy={fy + RECRUITED_R * 0.72}
+                rx={RECRUITED_R * 0.12} ry={RECRUITED_R * 0.09} fill="#F4C8CC" opacity={0.16} />
+              <ellipse cx={fx - RECRUITED_R * 0.74} cy={fy - RECRUITED_R * 0.12}
+                rx={RECRUITED_R * 0.12} ry={RECRUITED_R * 0.10} fill="#FFDCE4" opacity={0.22} />
+
+              {/* 4 · Antrum ring */}
+              <circle cx={fx} cy={fy} r={RECRUITED_R * 0.62} fill="url(#follicleRingGrad)" opacity={0.92} />
+
+              {/* E · Antrum interior shadow */}
+              <ellipse
+                cx={fx + RECRUITED_R * 0.04} cy={fy + RECRUITED_R * 0.28}
+                rx={RECRUITED_R * 0.36} ry={RECRUITED_R * 0.20}
+                fill="#C07888" opacity={0.10}
+              />
+
+              {/* ── Inner-ring surface bumps ── */}
+              <ellipse cx={fx - RECRUITED_R * 0.26} cy={fy - RECRUITED_R * 0.42}
+                rx={RECRUITED_R * 0.09} ry={RECRUITED_R * 0.07} fill="#FFE4E8" opacity={0.22} />
+              <ellipse cx={fx + RECRUITED_R * 0.30} cy={fy + RECRUITED_R * 0.32}
+                rx={RECRUITED_R * 0.09} ry={RECRUITED_R * 0.07} fill="#F8C8CC" opacity={0.16} />
+
+              {/* 5 · Fluid core */}
+              <circle cx={fx} cy={fy} r={RECRUITED_R * 0.24} fill="url(#follicleCoreGrad)" />
+              {/* 6 · Specular — position varies per follicle personality, creating
+                      different reflected-light angles across neighbouring follicles */}
+              <ellipse
+                cx={fx + RECRUITED_R * v.sX} cy={fy + RECRUITED_R * v.sY}
+                rx={RECRUITED_R * 0.20} ry={RECRUITED_R * 0.14}
+                fill="#FFFFFF" opacity={0.52}
+              />
+            </motion.g>
+          )
+        })}
+
+        {/*
+          Persistent dominant structure.
+          This single group morphs continuously through all lifecycle stages:
+            • Dominant follicle (white, growing)
+            • Ruptured follicle (rose-pink, slightly collapsed)
+            • Corpus luteum (orange, re-inflated, dark border + inner core)
+          Nothing is deleted or created — only r, fill, stroke, and inner
+          opacity change as eggProgress and corpusLuteumRadius increase.
+        */}
+        {structR > 0.5 && (
+          <g
+            style={{ cursor: 'pointer' }}
+            onClick={() => onStructureClick(isPreOvulation ? 'follicle' : 'corpus-luteum')}
+          >
+            {isPreOvulation && (
+              /*
+                Pre-ovulation follicle: fades out in the last moment before
+                ovulation (eP -0.02 → 0), so corp1 can already be fully formed
+                at the Ovulation Decision hard stop.
+              */
+              <motion.g
+                key="dom-structure"
+                style={{ transformOrigin: `${domFX}px ${domFY}px` }}
+                animate={{ scale: structR / RECRUITED_R }}
+                transition={{ duration: 0.5 }}
+                opacity={0.94 * Math.min(1, Math.max(0, -eggProgress / 0.02))}
+              >
+                {/* 1 · Outer membrane */}
+                <circle cx={domFX} cy={domFY} r={RECRUITED_R} fill="url(#follicleOuterGrad)" />
+                {/* 2 · Shadow crescent */}
+                <circle cx={domFX} cy={domFY} r={RECRUITED_R} fill="url(#follicleShadeGrad)" />
+                {/* 3 · Crevice/rim shadow */}
+                <circle cx={domFX} cy={domFY} r={RECRUITED_R} fill="url(#follicleRimGrad)" />
+
+                {/* A · Ambient highlight */}
+                <ellipse
+                  cx={domFX - RECRUITED_R * 0.08} cy={domFY - RECRUITED_R * 0.31}
+                  rx={RECRUITED_R * 0.68} ry={RECRUITED_R * 0.44}
+                  fill="#FFEAEC" opacity={0.28}
+                />
+                {/* B · Right-centre warming tone */}
+                <ellipse
+                  cx={domFX + RECRUITED_R * 0.32} cy={domFY + RECRUITED_R * 0.06}
+                  rx={RECRUITED_R * 0.32} ry={RECRUITED_R * 0.50}
+                  fill="#E5ACBA" opacity={0.09}
+                  transform={`rotate(-22,${domFX + RECRUITED_R * 0.32},${domFY + RECRUITED_R * 0.06})`}
+                />
+                {/* C · Lower form shadow */}
+                <ellipse
+                  cx={domFX + RECRUITED_R * 0.10} cy={domFY + RECRUITED_R * 0.52}
+                  rx={RECRUITED_R * 0.50} ry={RECRUITED_R * 0.26}
+                  fill="#C07888" opacity={0.10}
+                />
+                {/* D · Left subsurface scatter */}
+                <ellipse
+                  cx={domFX - RECRUITED_R * 0.26} cy={domFY - RECRUITED_R * 0.12}
+                  rx={RECRUITED_R * 0.28} ry={RECRUITED_R * 0.42}
+                  fill="#FFF0F2" opacity={0.28}
+                  transform={`rotate(8,${domFX - RECRUITED_R * 0.26},${domFY - RECRUITED_R * 0.12})`}
+                />
+
+                {/* Dominant follicle unique tonal mark */}
+                <ellipse
+                  cx={domFX + RECRUITED_R * 0.38} cy={domFY + RECRUITED_R * 0.50}
+                  rx={RECRUITED_R * 0.21} ry={RECRUITED_R * 0.14}
+                  fill="#ECA0A8" opacity={0.09}
+                />
+
+                {/* Edge irregularity — bottom rim */}
+                <ellipse
+                  cx={domFX - RECRUITED_R * 0.16} cy={domFY + RECRUITED_R * 0.86}
+                  rx={RECRUITED_R * 0.14} ry={RECRUITED_R * 0.11}
+                  fill="#C07888" opacity={0.10}
+                />
+
+                {/* ── Follic3: mural granulosa cell wall ring ───────────────────────
+                    Appears during competition→dominant transition.  Darker annular band
+                    (visible between this 0.80R circle and the antrum ring below)
+                    represents the thickening granulosa cell layer of an antral follicle.
+                    Deepens to #E9B1B1 in follic5 as the wall thickens further. */}
+                {follic3T > 0 && (
+                  <>
+                    <circle cx={domFX} cy={domFY} r={RECRUITED_R * 0.80}
+                      fill="#F7C3C3" opacity={follic3T * 0.82} />
+                    <circle cx={domFX} cy={domFY} r={RECRUITED_R * 0.80}
+                      fill="url(#follicleShadeGrad)" opacity={follic3T * 0.40} />
+                    {follic5T > 0 && (
+                      <circle cx={domFX} cy={domFY} r={RECRUITED_R * 0.80}
+                        fill="#E9B1B1" opacity={follic5T * 0.55} />
+                    )}
+                  </>
+                )}
+
+                {/* ── Outer-ring surface bumps ─────────────────────────────────── */}
+                <ellipse cx={domFX + RECRUITED_R * 0.02} cy={domFY - RECRUITED_R * 0.78}
+                  rx={RECRUITED_R * 0.13} ry={RECRUITED_R * 0.11} fill="#FFE8EC" opacity={0.27} />
+                <ellipse cx={domFX + RECRUITED_R * 0.56} cy={domFY - RECRUITED_R * 0.50}
+                  rx={RECRUITED_R * 0.11} ry={RECRUITED_R * 0.09} fill="#FFE0E8" opacity={0.21} />
+                <ellipse cx={domFX + RECRUITED_R * 0.76} cy={domFY + RECRUITED_R * 0.20}
+                  rx={RECRUITED_R * 0.12} ry={RECRUITED_R * 0.10} fill="#F8CCCC" opacity={0.18} />
+                <ellipse cx={domFX - RECRUITED_R * 0.36} cy={domFY + RECRUITED_R * 0.72}
+                  rx={RECRUITED_R * 0.12} ry={RECRUITED_R * 0.09} fill="#F4C8CC" opacity={0.16} />
+                <ellipse cx={domFX - RECRUITED_R * 0.74} cy={domFY - RECRUITED_R * 0.12}
+                  rx={RECRUITED_R * 0.12} ry={RECRUITED_R * 0.10} fill="#FFDCE4" opacity={0.22} />
+
+                {/* ── Follic5: antrum depth lighting ───────────────────────────────
+                    As antrum fluid expands the lower cavity darkens (fluid absorption)
+                    and the upper area brightens (transmitted light through thin wall). */}
+                {follic5T > 0 && (
+                  <>
+                    <ellipse
+                      cx={domFX + RECRUITED_R * 0.05} cy={domFY + RECRUITED_R * 0.24}
+                      rx={RECRUITED_R * 0.58} ry={RECRUITED_R * 0.35}
+                      fill="#D99D9D" opacity={follic5T * 0.28}
+                    />
+                    <ellipse
+                      cx={domFX - RECRUITED_R * 0.04} cy={domFY - RECRUITED_R * 0.18}
+                      rx={RECRUITED_R * 0.46} ry={RECRUITED_R * 0.28}
+                      fill="#FFEDED" opacity={follic5T * 0.36}
+                    />
+                  </>
+                )}
+
+                {/* 4 · Antrum ring — radius expands as fluid accumulates (follic5) */}
+                <circle cx={domFX} cy={domFY}
+                  r={RECRUITED_R * (0.62 + follic5T * 0.12)}
+                  fill="url(#follicleRingGrad)" opacity={0.92} />
+
+                {/* ── Granulosa cell bump ring ─────────────────────────────────────
+                    22 pearl-like bumps at the granulosa-antrum boundary (corona radiata /
+                    mural granulosa cells lining the inner follicle wall).  Colors shift
+                    lit→shadow around the ring following upper-left illumination.
+                    Bumps grow slightly larger in follic5 as the antrum wall matures. */}
+                {follic3T > 0 && (
+                  <>
+                    {Array.from({ length: 22 }, (_, b) => {
+                      const angle = (b / 22) * Math.PI * 2 - Math.PI / 2
+                      const ringR = RECRUITED_R * (0.62 + follic5T * 0.12)
+                      const bx = domFX + Math.cos(angle) * ringR
+                      const by = domFY + Math.sin(angle) * ringR
+                      // Lighting peaks at upper-left (angle ≈ −135° from +x axis)
+                      const litF = (Math.cos(angle + Math.PI * 0.75) + 1) / 2
+                      const bumpFill = litF > 0.60 ? '#FFF4F4' : litF > 0.28 ? '#F9DBDB' : '#F1BBBB'
+                      const br = RECRUITED_R * (0.096 + follic5T * 0.020)
+                      return (
+                        <g key={`gbump-${b}`}>
+                          <ellipse
+                            cx={bx} cy={by}
+                            rx={br} ry={br * 0.91}
+                            fill={bumpFill}
+                            opacity={follic3T * (0.72 + litF * 0.28)}
+                          />
+                          <ellipse
+                            cx={bx - br * 0.24} cy={by - br * 0.26}
+                            rx={br * 0.38} ry={br * 0.30}
+                            fill="#FFFAFA"
+                            opacity={follic3T * litF * 0.62}
+                          />
+                        </g>
+                      )
+                    })}
+                  </>
+                )}
+
+                {/* E · Antrum interior shadow */}
+                <ellipse
+                  cx={domFX + RECRUITED_R * 0.04} cy={domFY + RECRUITED_R * 0.28}
+                  rx={RECRUITED_R * 0.36} ry={RECRUITED_R * 0.20}
+                  fill="#C07888" opacity={0.10}
+                />
+
+                {/* ── Inner-ring surface bumps ──────────────────────────────────── */}
+                <ellipse cx={domFX - RECRUITED_R * 0.26} cy={domFY - RECRUITED_R * 0.42}
+                  rx={RECRUITED_R * 0.09} ry={RECRUITED_R * 0.07} fill="#FFE4E8" opacity={0.22} />
+                <ellipse cx={domFX + RECRUITED_R * 0.30} cy={domFY + RECRUITED_R * 0.32}
+                  rx={RECRUITED_R * 0.09} ry={RECRUITED_R * 0.07} fill="#F8C8CC" opacity={0.16} />
+
+                {/* ── Cumulus oophorus (follic5) ────────────────────────────────────
+                    The oocyte suspended in antrum fluid by its cumulus cell envelope.
+                    Dome grows out from the core position and floats upward as the
+                    antrum expands — the cumulus-oocyte complex detaches from the
+                    granulosa wall and drifts freely in the fluid (medically accurate). */}
+                {follic5T > 0 && (
+                  <>
+                    <circle
+                      cx={domFX + RECRUITED_R * 0.25 * follic5T}
+                      cy={domFY - RECRUITED_R * 0.05 * follic5T}
+                      r={RECRUITED_R * (0.25 + follic5T * 0.09)}
+                      fill="#FFCECE"
+                      opacity={follic5T * 0.92}
+                    />
+                    <circle
+                      cx={domFX + RECRUITED_R * 0.25 * follic5T}
+                      cy={domFY - RECRUITED_R * 0.05 * follic5T}
+                      r={RECRUITED_R * (0.25 + follic5T * 0.09)}
+                      fill="url(#follicleShadeGrad)"
+                      opacity={follic5T * 0.45}
+                    />
+                  </>
+                )}
+
+                {/* 5 · Oocyte — gradient circle drifts rightward and crossfades into egg.svg */}
+                <circle
+                  cx={domFX + RECRUITED_R * 0.25 * follic5T}
+                  cy={domFY - RECRUITED_R * 0.05 * follic5T}
+                  r={RECRUITED_R * 0.24}
+                  fill="url(#follicleCoreGrad)"
+                  opacity={1 - follic5T}
+                />
+                {follic5T > 0 && (
+                  <g
+                    transform={`translate(${domFX + RECRUITED_R * (0.25 * follic5T - 0.24)}, ${domFY - RECRUITED_R * (0.05 * follic5T + 0.24)}) scale(${RECRUITED_R * 0.24 / 280})`}
+                    opacity={follic5T}
+                  >
+                    <path id="egg-outer"  d="M17 379C8.5 356.8,3.7 333,1 309C-1.7 285,-1.7 258.2,1 235C3.7 211.8,8.5 191.2,17 170C25.5 148.8,39.3 125.5,52 108C64.7 90.5,75.3 79.3,93 65C110.7 50.7,134.5 32.7,158 22C181.5 11.3,204.8 4.5,234 1C263.2 -2.5,301.2 -4.7,333 1C364.8 6.7,396.3 17.2,425 35C453.7 52.8,483.8 79.7,505 108C526.2 136.3,543 173.8,552 205C561 236.2,563.2 262.2,559 295C554.8 327.8,542.3 370.7,527 402C511.7 433.3,487 462,467 483C447 504,427.7 516.8,407 528C386.3 539.2,367.2 545.2,343 550C318.8 554.8,289.7 558.8,262 557C234.3 555.2,202.7 548.5,177 539C151.3 529.5,128.8 516.2,108 500C87.2 483.8,67.2 462.2,52 442C36.8 421.8,25.5 401.2,17 379Z" fill="url(#eggOuterGrad)" stroke="#FFEDED" strokeWidth="2" />
+                    <path id="egg-inner"  d="M34 212C38.5 189,52.3 158.3,56 156C59.7 153.7,56 180.5,56 198C56 215.5,55 236.8,56 261C57 285.2,51.2 315.7,62 343C72.8 370.3,95.5 401.2,121 425C146.5 448.8,172.2 477.7,215 486C257.8 494.3,338.8 485.2,378 475C417.2 464.8,430.5 448.7,450 425C469.5 401.3,486.3 364,495 333C503.7 302,504.7 266.3,502 239C499.3 211.7,489 189.7,479 169C469 148.3,455.7 131.3,442 115C428.3 98.7,414.5 83.3,397 71C379.5 58.7,361.8 46,337 41C312.2 36,275.5 41,248 41C220.5 41,172 44.5,172 41C172 37.5,217.7 21.5,248 20C278.3 18.5,322.7 22.3,354 32C385.3 41.7,411.3 57.3,436 78C460.7 98.7,487 126.3,502 156C517 185.7,523.2 224,526 256C528.8 288,526.8 319.8,519 348C511.2 376.2,496.2 401,479 425C461.8 449,441.2 475.5,416 492C390.8 508.5,360 519.7,328 524C296 528.3,256.8 524.3,224 518C191.2 511.7,156 499,131 486C106 473,86.5 458.3,74 440C61.5 421.7,63.5 400.3,56 376C48.5 351.7,32.7 321.3,29 294C25.3 266.7,29.5 235,34 212Z" fill="#FFCECE" fillOpacity={0.4} />
+                    <path                 d="M97 367C78.8 337.3,77 280.8,72 258C67 235.2,60.8 224.8,67 230C73.2 235.2,89.2 264.5,109 289C128.8 313.5,151.3 358.8,186 377C220.7 395.2,278.7 402.7,317 398C355.3 393.3,395.5 369.5,416 349C436.5 328.5,436 300.2,440 275C444 249.8,445.5 218.2,440 198C434.5 177.8,415.3 167.8,407 154C398.7 140.2,384.5 116.2,390 115C395.5 113.8,423.3 126.2,440 147C456.7 167.8,481.7 206.3,490 240C498.3 273.7,503.8 314,490 349C476.2 384,437.7 430.8,407 450C376.3 469.2,343.7 466.3,306 464C268.3 461.7,215.8 452.2,181 436C146.2 419.8,115.2 396.7,97 367Z" fill="#FFEDED" />
+                    <path                 d="M81 151C91.5 125.3,110.5 109.7,124 98C137.5 86.3,145.3 85.7,162 81C178.7 76.3,194.5 70,224 70C253.5 70,305.8 71.5,339 81C372.2 90.5,405.8 101.7,423 127C440.2 152.3,442 197.2,442 233C442 268.8,437.3 312.2,423 342C408.7 371.8,379.3 399,356 412C332.7 425,317.5 423,283 420C248.5 417,180.7 407,149 394C117.3 381,107.7 365.7,93 342C78.3 318.3,63 283.8,61 252C59 220.2,70.5 176.7,81 151Z" fill="#FFF4F4" />
+                    <path id="egg-center" d="M182 246C184.5 233,189.5 225.5,197 215C204.5 204.5,214.5 190.7,227 183C239.5 175.3,256.2 170.2,272 169C287.8 167.8,306.5 168.3,322 176C337.5 183.7,355.5 200.7,365 215C374.5 229.3,379 245.7,379 262C379 278.3,373 298.2,365 313C357 327.8,344.2 342.8,331 351C317.8 359.2,302 362,286 362C270 362,248.8 357,235 351C221.2 345,211.8 335.7,203 326C194.2 316.3,185.5 306.3,182 293C178.5 279.7,179.5 259,182 246Z" fill="url(#follicleCoreGrad)" stroke="#E9B1B1" strokeWidth="1" />
+                    <path                 d="M241 246C244.5 238.5,248.5 235,256 230C263.5 225,276.8 216.8,286 216C295.2 215.2,304.7 218.8,311 225C317.3 231.2,321.8 243.3,324 253C326.2 262.7,328.8 274.3,324 283C319.2 291.7,306.3 302.8,295 305C283.7 307.2,266 301,256 296C246 291,237.5 283.3,235 275C232.5 266.7,237.5 253.5,241 246Z" fill="#FFADAD" />
+                    <path                 d="M228 233C228 238,234.7 246,239 246C243.3 246,248.8 238,254 233C259.2 228,264.3 218.8,270 216C275.7 213.2,285 217.5,288 216C291 214.5,291.8 208.5,288 207C284.2 205.5,273.2 205.5,265 207C256.8 208.5,245.2 211.7,239 216C232.8 220.3,228 228,228 233Z" fill="#FFE4E4" />
+                  </g>
+                )}
+
+                {/* Cumulus oophorus highlight (follic5) */}
+                {follic5T > 0 && (
+                  <ellipse
+                    cx={domFX + RECRUITED_R * 0.25 * follic5T - RECRUITED_R * 0.08}
+                    cy={domFY - RECRUITED_R * 0.05 * follic5T - RECRUITED_R * (0.20 + follic5T * 0.06)}
+                    rx={RECRUITED_R * 0.13}
+                    ry={RECRUITED_R * 0.09}
+                    fill="#FFFFFF"
+                    opacity={follic5T * 0.55}
+                  />
+                )}
+
+                {/* 6 · Specular — (-0.09, -0.19) unique to dominant follicle */}
+                <ellipse
+                  cx={domFX - RECRUITED_R * 0.09} cy={domFY - RECRUITED_R * 0.19}
+                  rx={RECRUITED_R * 0.20} ry={RECRUITED_R * 0.14}
+                  fill="#FFFFFF" opacity={0.52}
+                />
+              </motion.g>
+            )}
+            {!isPreOvulation && (
+              /* Post-ovulation: corp1 (Ovulation Decision) → corp2 (After
+                 Release) → corp3 (Preparation), one continuous structure. */
+              <CorpusLuteumRosette
+                cx={domFX} cy={domFY} R={structR}
+                stageT={corpusStageT}
+              />
+            )}
+          </g>
+        )}
+
+        {/*
+          LH surge activation ring.
+          When LH surges it triggers final follicle maturation and ovulation.
+          A pulsing pink ring around the dominant follicle communicates this
+          "activation" signal — the follicle wall is about to rupture.
+          Only shown pre-ovulation when the follicle is large enough to ovulate.
+        */}
+        {lhLevel > 0.18 && isPreOvulation && dominantFollicleRadius > 0.12 && structR > BASE_R && (
+          <motion.circle
+            cx={domFX} cy={domFY}
+            r={structR + 16}
+            fill="none"
+            stroke="rgba(201,104,117,0.80)"
+            strokeWidth={4}
+            initial={{ opacity: 0, strokeWidth: 3 }}
+            animate={{
+              opacity: [lhLevel * 0.55, lhLevel * 0.92, lhLevel * 0.55],
+              strokeWidth: [3, 5.5, 3],
+            }}
+            transition={{ duration: 1.3, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ pointerEvents: 'none' }}
+          />
+        )}
+
+        {/* Granulosa cells — zoom-in detail, pre-ovulation dominant follicle only */}
+        {showGranulosa && (
+          <>
+            {[0, 60, 120, 180, 240, 300].map((angle) => {
+              const rad = (angle * Math.PI) / 180
+              return (
+                <circle
+                  key={`gc-${angle}`}
+                  cx={domFX + (structR - 12) * Math.cos(rad)}
+                  cy={domFY + (structR - 12) * Math.sin(rad)}
+                  r={9}
+                  fill="var(--lavender)"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => onStructureClick('granulosa-cells')}
+                />
+              )
+            })}
+          </>
+        )}
+      </g>
+
+      {/* ── EggGroup ──────────────────────────────────────────────────────── */}
+      <g id="EggGroup">
+        {/* Invisible guide path — documents the egg's arc-length travel route */}
+        <path d={EGG_GUIDE_D} fill="none" stroke="none" visibility="hidden" />
+
+        {eggVisible && (() => {
+          const [ex, ey] = eggPosition(Math.max(0, eggProgress))
+          const eggS = 15 / 280
+          return (
+            <motion.g
+              animate={{ x: ex, y: ey }}
+              initial={{ x: ex, y: ey }}
+              transition={{ duration: 0.5 }}
+              style={{ cursor: 'pointer' }}
+              onClick={() => onStructureClick('egg')}
+            >
+              {/* Inline egg paths — scale from 561×558 SVG space, centre (280,279) → (0,0) */}
+              <g transform={`translate(${-280 * eggS}, ${-279 * eggS}) scale(${eggS})`}>
+                <path className="egg-outer"  d="M17 379C8.5 356.8,3.7 333,1 309C-1.7 285,-1.7 258.2,1 235C3.7 211.8,8.5 191.2,17 170C25.5 148.8,39.3 125.5,52 108C64.7 90.5,75.3 79.3,93 65C110.7 50.7,134.5 32.7,158 22C181.5 11.3,204.8 4.5,234 1C263.2 -2.5,301.2 -4.7,333 1C364.8 6.7,396.3 17.2,425 35C453.7 52.8,483.8 79.7,505 108C526.2 136.3,543 173.8,552 205C561 236.2,563.2 262.2,559 295C554.8 327.8,542.3 370.7,527 402C511.7 433.3,487 462,467 483C447 504,427.7 516.8,407 528C386.3 539.2,367.2 545.2,343 550C318.8 554.8,289.7 558.8,262 557C234.3 555.2,202.7 548.5,177 539C151.3 529.5,128.8 516.2,108 500C87.2 483.8,67.2 462.2,52 442C36.8 421.8,25.5 401.2,17 379Z" fill="url(#eggOuterGrad)" stroke="#FFEDED" strokeWidth="2" />
+                <path className="egg-inner"  d="M34 212C38.5 189,52.3 158.3,56 156C59.7 153.7,56 180.5,56 198C56 215.5,55 236.8,56 261C57 285.2,51.2 315.7,62 343C72.8 370.3,95.5 401.2,121 425C146.5 448.8,172.2 477.7,215 486C257.8 494.3,338.8 485.2,378 475C417.2 464.8,430.5 448.7,450 425C469.5 401.3,486.3 364,495 333C503.7 302,504.7 266.3,502 239C499.3 211.7,489 189.7,479 169C469 148.3,455.7 131.3,442 115C428.3 98.7,414.5 83.3,397 71C379.5 58.7,361.8 46,337 41C312.2 36,275.5 41,248 41C220.5 41,172 44.5,172 41C172 37.5,217.7 21.5,248 20C278.3 18.5,322.7 22.3,354 32C385.3 41.7,411.3 57.3,436 78C460.7 98.7,487 126.3,502 156C517 185.7,523.2 224,526 256C528.8 288,526.8 319.8,519 348C511.2 376.2,496.2 401,479 425C461.8 449,441.2 475.5,416 492C390.8 508.5,360 519.7,328 524C296 528.3,256.8 524.3,224 518C191.2 511.7,156 499,131 486C106 473,86.5 458.3,74 440C61.5 421.7,63.5 400.3,56 376C48.5 351.7,32.7 321.3,29 294C25.3 266.7,29.5 235,34 212Z" fill="#FFCECE" fillOpacity={0.4} />
+                <path                        d="M97 367C78.8 337.3,77 280.8,72 258C67 235.2,60.8 224.8,67 230C73.2 235.2,89.2 264.5,109 289C128.8 313.5,151.3 358.8,186 377C220.7 395.2,278.7 402.7,317 398C355.3 393.3,395.5 369.5,416 349C436.5 328.5,436 300.2,440 275C444 249.8,445.5 218.2,440 198C434.5 177.8,415.3 167.8,407 154C398.7 140.2,384.5 116.2,390 115C395.5 113.8,423.3 126.2,440 147C456.7 167.8,481.7 206.3,490 240C498.3 273.7,503.8 314,490 349C476.2 384,437.7 430.8,407 450C376.3 469.2,343.7 466.3,306 464C268.3 461.7,215.8 452.2,181 436C146.2 419.8,115.2 396.7,97 367Z" fill="#FFEDED" />
+                <path                        d="M81 151C91.5 125.3,110.5 109.7,124 98C137.5 86.3,145.3 85.7,162 81C178.7 76.3,194.5 70,224 70C253.5 70,305.8 71.5,339 81C372.2 90.5,405.8 101.7,423 127C440.2 152.3,442 197.2,442 233C442 268.8,437.3 312.2,423 342C408.7 371.8,379.3 399,356 412C332.7 425,317.5 423,283 420C248.5 417,180.7 407,149 394C117.3 381,107.7 365.7,93 342C78.3 318.3,63 283.8,61 252C59 220.2,70.5 176.7,81 151Z" fill="#FFF4F4" />
+                <path className="egg-center" d="M182 246C184.5 233,189.5 225.5,197 215C204.5 204.5,214.5 190.7,227 183C239.5 175.3,256.2 170.2,272 169C287.8 167.8,306.5 168.3,322 176C337.5 183.7,355.5 200.7,365 215C374.5 229.3,379 245.7,379 262C379 278.3,373 298.2,365 313C357 327.8,344.2 342.8,331 351C317.8 359.2,302 362,286 362C270 362,248.8 357,235 351C221.2 345,211.8 335.7,203 326C194.2 316.3,185.5 306.3,182 293C178.5 279.7,179.5 259,182 246Z" fill="url(#follicleCoreGrad)" stroke="#E9B1B1" strokeWidth="1" />
+                <path                        d="M241 246C244.5 238.5,248.5 235,256 230C263.5 225,276.8 216.8,286 216C295.2 215.2,304.7 218.8,311 225C317.3 231.2,321.8 243.3,324 253C326.2 262.7,328.8 274.3,324 283C319.2 291.7,306.3 302.8,295 305C283.7 307.2,266 301,256 296C246 291,237.5 283.3,235 275C232.5 266.7,237.5 253.5,241 246Z" fill="#FFADAD" />
+                <path                        d="M228 233C228 238,234.7 246,239 246C243.3 246,248.8 238,254 233C259.2 228,264.3 218.8,270 216C275.7 213.2,285 217.5,288 216C291 214.5,291.8 208.5,288 207C284.2 205.5,273.2 205.5,265 207C256.8 208.5,245.2 211.7,239 216C232.8 220.3,228 228,228 233Z" fill="#FFE4E4" />
+              </g>
+            </motion.g>
+          )
+        })()}
+      </g>
+
+    </g>
+  )
+}
