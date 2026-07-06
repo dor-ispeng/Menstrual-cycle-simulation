@@ -92,12 +92,16 @@ const OVARY_PATH =
 // All positions shifted 50 px left to match the new ovary centre (830,630).
 // Each point has ≥40 px clearance from the ovary boundary.
 
+// Only indices 1–7 ever render on screen (smallFollicleCount tops out at 8,
+// and the fraction formula below zeroes out at i=8), so indices 8–11 are
+// unused reserve slots. Index 5 was moved from its original right/lower-right
+// scatter position onto index 8's old (unused) left-side coordinates.
 const FOLLICLE_POSITIONS: [number, number][] = [
   [845, 615],  // [0] dominant candidate — grows with dominantFollicleRadius
   [790, 545], [845, 540], [920, 555],  // upper scatter
-  [960, 615], [940, 670], [880, 700],  // right / lower-right scatter
+  [960, 615], [750, 620], [880, 700],  // [5] moved to the left side (was [940,670])
   [775, 680], [750, 620],              // left scatter
-  [810, 595], [905, 595], [850, 670],  // inner scatter
+  [810, 595], [905, 595], [850, 670],  // inner scatter (unused)
 ]
 
 const DOMINANT_IDX = 0   // index of the persistent dominant candidate
@@ -128,6 +132,69 @@ const FOLLICLE_VARIATIONS = [
   { sX: -0.10, sY: -0.20, aOffY: -0.32, aA: 0.29, mX: -0.30, mY: -0.42, mRX: 0.21, mRY: 0.13, mA: 0.08, mF: '#EAB0B6', sBoost: 0.06, eX: -0.71, eY:  0.41 },
   { sX: -0.15, sY: -0.13, aOffY: -0.26, aA: 0.23, mX:  0.52, mY:  0.20, mRX: 0.19, mRY: 0.12, mA: 0.10, mF: '#E898A6', sBoost: 0.03, eX: -0.53, eY: -0.63 },
 ] as const
+
+// ── Small-follicle silhouette variants ───────────────────────────────────────
+// 5 very low-amplitude outlines (shared 1:1 with the personality table above
+// via the same i % 5 cycle) — mostly spherical, with just enough per-variant
+// difference to avoid looking like a single stamped-out circle. Kept
+// deliberately subtle: this should read as "round, hand-painted," not
+// "organic blob."
+const FOLLICLE_SHAPE_SEEDS = [
+  [0.018, 0.010, 0.4, 2.6],
+  [0.012, 0.017, 2.0, 0.2],
+  [0.020, 0.008, 3.4, 5.5],
+  [0.013, 0.015, 1.1, 3.8],
+  [0.017, 0.012, 4.6, 1.4],
+] as const
+
+function catmullRomClosedLite(pts: [number, number][]): string {
+  const n = pts.length
+  let d = `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n]
+    const cp1x = p1[0] + (p2[0] - p0[0]) / 6, cp1y = p1[1] + (p2[1] - p0[1]) / 6
+    const cp2x = p2[0] - (p3[0] - p1[0]) / 6, cp2y = p2[1] - (p3[1] - p1[1]) / 6
+    d += ` C${cp1x.toFixed(1)} ${cp1y.toFixed(1)},${cp2x.toFixed(1)} ${cp2y.toFixed(1)},${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`
+  }
+  return d + 'Z'
+}
+
+function smallFollicleBlobPath(cx: number, cy: number, R: number, seed: number): string {
+  const [amp1, amp2, phase1, phase2] = FOLLICLE_SHAPE_SEEDS[seed % FOLLICLE_SHAPE_SEEDS.length]
+  const N = 28
+  const pts: [number, number][] = []
+  for (let i = 0; i < N; i++) {
+    const theta = (i / N) * Math.PI * 2
+    const r = R * (1 + amp1 * Math.sin(2 * theta + phase1) + amp2 * Math.sin(3 * theta + phase2))
+    pts.push([cx + r * Math.cos(theta), cy + r * Math.sin(theta)])
+  }
+  return catmullRomClosedLite(pts)
+}
+
+// ── Per-follicle shadow/highlight rotation ───────────────────────────────────
+// The follicle gradients (follicleOuterGrad/ShadeGrad/RimGrad) all use
+// percentage-based centres, so every follicle painted the same lit-upper-left
+// / shadow-lower-right direction regardless of where it actually sits on the
+// ovary artwork (public/ovary.png) — which is itself lit from the top, with
+// its own shading falling off toward the bottom and left. Follicles close to
+// the ovary's own shaded rim need their gradient rotated (around their own
+// centre) to read consistently with the surface right behind them; follicles
+// where the generic direction already roughly matches the local artwork (e.g.
+// #4, on the right, closest to the ovary's own lit side) are left untouched.
+// Keyed by FOLLICLE_POSITIONS index; anything absent defaults to 0deg.
+const FOLLICLE_SHADE_ROTATION: Record<number, number> = {
+  1: 180,  // top-left of the top pair — flipped to meet the ovary's shaded top rim
+  2: 180,  // top-right of the top pair — same flip
+  3: -40,  // upper-right — nudged 20deg, then 60deg counter-clockwise
+  5: 140,  // moved onto the left side — was -40deg, then flipped 180deg so the shadow lands on the left
+  7: -25,  // lower-left — small nudge, mirrors #3's treatment on the opposite side
+}
+
+// Per-follicle shadow-crescent opacity multiplier (default 1 = untouched).
+// Keyed by FOLLICLE_POSITIONS index.
+const FOLLICLE_SHADE_OPACITY: Record<number, number> = {
+  5: 0.55,  // lightened — its shadow read too heavy after the rotation change
+}
 
 // ── Egg travel: arc-length parameterized along the fallopian tube ────────────
 // Pre-sampled once at module load. No DOM or ref needed.
@@ -385,6 +452,11 @@ export default function AnatomyLayer({
           <stop offset="88%"  stopColor="#F0BCBC" />
           <stop offset="100%" stopColor="#E8A8A8" />
         </radialGradient>
+        {/* Egg interior wash (component #3): subtle, slightly-darker accent — not meant to read as directional lighting */}
+        <linearGradient id="eggWashGrad" x1="20%" y1="15%" x2="80%" y2="85%">
+          <stop offset="0%"   stopColor="#FFE9E9" />
+          <stop offset="100%" stopColor="#F5D6D6" />
+        </linearGradient>
       </defs>
       {/* Corp1/corp2/corp3 gradients now live inside CorpusLuteumRosette,
           which blends its own stop colours by stageT instead of using
@@ -582,29 +654,33 @@ export default function AnatomyLayer({
 
           if (scale < 0.03) return null
 
-          // Pick this follicle's painting personality (cycles every 5)
+          // Pick this follicle's painting personality (cycles every 5) — the
+          // matching shape-seed cycle reuses the same index, so a personality
+          // and its silhouette always travel together.
           const v = FOLLICLE_VARIATIONS[i % FOLLICLE_VARIATIONS.length]
+          const blobPath = smallFollicleBlobPath(fx, fy, RECRUITED_R, i)
+          const shadeRotation = FOLLICLE_SHADE_ROTATION[i] ?? 0
+          const shadeOpacity = FOLLICLE_SHADE_OPACITY[i] ?? 1
 
           return (
             <motion.g
               key={`follicle-${i}`}
               style={{ cursor: 'pointer', transformOrigin: `${fx}px ${fy}px` }}
               onClick={() => onStructureClick('follicle')}
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale, opacity: fraction }}
+              initial={{ scale: 0, opacity: 0, rotate: shadeRotation }}
+              animate={{ scale, opacity: fraction, rotate: shadeRotation }}
               transition={{ duration: 0.5 }}
             >
-              {/* 1 · Outer membrane */}
-              <circle cx={fx} cy={fy} r={RECRUITED_R} fill="url(#follicleOuterGrad)" />
+              {/* 1 · Outer membrane — slightly irregular silhouette, not a perfect circle */}
+              <path d={blobPath} fill="url(#follicleOuterGrad)" />
               {/* 2 · Shadow crescent */}
-              <circle cx={fx} cy={fy} r={RECRUITED_R} fill="url(#follicleShadeGrad)" />
+              <path d={blobPath} fill="url(#follicleShadeGrad)" opacity={shadeOpacity} />
               {/* Per-follicle shadow weight — some follicles carry heavier pigment */}
               {v.sBoost > 0 && (
-                <circle cx={fx} cy={fy} r={RECRUITED_R}
-                  fill="url(#follicleShadeGrad)" opacity={v.sBoost} />
+                <path d={blobPath} fill="url(#follicleShadeGrad)" opacity={v.sBoost * shadeOpacity} />
               )}
               {/* 3 · Crevice / rim shadow */}
-              <circle cx={fx} cy={fy} r={RECRUITED_R} fill="url(#follicleRimGrad)" />
+              <path d={blobPath} fill="url(#follicleRimGrad)" />
 
               {/* ── Organic texture blobs ── */}
 
@@ -959,10 +1035,10 @@ export default function AnatomyLayer({
             >
               {/* Inline egg paths — scale from 561×558 SVG space, centre (280,279) → (0,0) */}
               <g transform={`translate(${-280 * eggS}, ${-279 * eggS}) scale(${eggS})`}>
-                <path className="egg-outer"  d="M17 379C8.5 356.8,3.7 333,1 309C-1.7 285,-1.7 258.2,1 235C3.7 211.8,8.5 191.2,17 170C25.5 148.8,39.3 125.5,52 108C64.7 90.5,75.3 79.3,93 65C110.7 50.7,134.5 32.7,158 22C181.5 11.3,204.8 4.5,234 1C263.2 -2.5,301.2 -4.7,333 1C364.8 6.7,396.3 17.2,425 35C453.7 52.8,483.8 79.7,505 108C526.2 136.3,543 173.8,552 205C561 236.2,563.2 262.2,559 295C554.8 327.8,542.3 370.7,527 402C511.7 433.3,487 462,467 483C447 504,427.7 516.8,407 528C386.3 539.2,367.2 545.2,343 550C318.8 554.8,289.7 558.8,262 557C234.3 555.2,202.7 548.5,177 539C151.3 529.5,128.8 516.2,108 500C87.2 483.8,67.2 462.2,52 442C36.8 421.8,25.5 401.2,17 379Z" fill="url(#eggOuterGrad)" stroke="#FFEDED" strokeWidth="2" />
+                <path className="egg-outer"  d="M17 379C8.5 356.8,3.7 333,1 309C-1.7 285,-1.7 258.2,1 235C3.7 211.8,8.5 191.2,17 170C25.5 148.8,39.3 125.5,52 108C64.7 90.5,75.3 79.3,93 65C110.7 50.7,134.5 32.7,158 22C181.5 11.3,204.8 4.5,234 1C263.2 -2.5,301.2 -4.7,333 1C364.8 6.7,396.3 17.2,425 35C453.7 52.8,483.8 79.7,505 108C526.2 136.3,543 173.8,552 205C561 236.2,563.2 262.2,559 295C554.8 327.8,542.3 370.7,527 402C511.7 433.3,487 462,467 483C447 504,427.7 516.8,407 528C386.3 539.2,367.2 545.2,343 550C318.8 554.8,289.7 558.8,262 557C234.3 555.2,202.7 548.5,177 539C151.3 529.5,128.8 516.2,108 500C87.2 483.8,67.2 462.2,52 442C36.8 421.8,25.5 401.2,17 379Z" fill="url(#eggOuterGrad)" stroke="#FFE4E4" strokeWidth="2" />
                 <path className="egg-inner"  d="M34 212C38.5 189,52.3 158.3,56 156C59.7 153.7,56 180.5,56 198C56 215.5,55 236.8,56 261C57 285.2,51.2 315.7,62 343C72.8 370.3,95.5 401.2,121 425C146.5 448.8,172.2 477.7,215 486C257.8 494.3,338.8 485.2,378 475C417.2 464.8,430.5 448.7,450 425C469.5 401.3,486.3 364,495 333C503.7 302,504.7 266.3,502 239C499.3 211.7,489 189.7,479 169C469 148.3,455.7 131.3,442 115C428.3 98.7,414.5 83.3,397 71C379.5 58.7,361.8 46,337 41C312.2 36,275.5 41,248 41C220.5 41,172 44.5,172 41C172 37.5,217.7 21.5,248 20C278.3 18.5,322.7 22.3,354 32C385.3 41.7,411.3 57.3,436 78C460.7 98.7,487 126.3,502 156C517 185.7,523.2 224,526 256C528.8 288,526.8 319.8,519 348C511.2 376.2,496.2 401,479 425C461.8 449,441.2 475.5,416 492C390.8 508.5,360 519.7,328 524C296 528.3,256.8 524.3,224 518C191.2 511.7,156 499,131 486C106 473,86.5 458.3,74 440C61.5 421.7,63.5 400.3,56 376C48.5 351.7,32.7 321.3,29 294C25.3 266.7,29.5 235,34 212Z" fill="#FFCECE" fillOpacity={0.4} />
-                <path                        d="M97 367C78.8 337.3,77 280.8,72 258C67 235.2,60.8 224.8,67 230C73.2 235.2,89.2 264.5,109 289C128.8 313.5,151.3 358.8,186 377C220.7 395.2,278.7 402.7,317 398C355.3 393.3,395.5 369.5,416 349C436.5 328.5,436 300.2,440 275C444 249.8,445.5 218.2,440 198C434.5 177.8,415.3 167.8,407 154C398.7 140.2,384.5 116.2,390 115C395.5 113.8,423.3 126.2,440 147C456.7 167.8,481.7 206.3,490 240C498.3 273.7,503.8 314,490 349C476.2 384,437.7 430.8,407 450C376.3 469.2,343.7 466.3,306 464C268.3 461.7,215.8 452.2,181 436C146.2 419.8,115.2 396.7,97 367Z" fill="#FFEDED" />
-                <path                        d="M81 151C91.5 125.3,110.5 109.7,124 98C137.5 86.3,145.3 85.7,162 81C178.7 76.3,194.5 70,224 70C253.5 70,305.8 71.5,339 81C372.2 90.5,405.8 101.7,423 127C440.2 152.3,442 197.2,442 233C442 268.8,437.3 312.2,423 342C408.7 371.8,379.3 399,356 412C332.7 425,317.5 423,283 420C248.5 417,180.7 407,149 394C117.3 381,107.7 365.7,93 342C78.3 318.3,63 283.8,61 252C59 220.2,70.5 176.7,81 151Z" fill="#FFF4F4" />
+                <path                        d="M97 367C78.8 337.3,77 280.8,72 258C67 235.2,60.8 224.8,67 230C73.2 235.2,89.2 264.5,109 289C128.8 313.5,151.3 358.8,186 377C220.7 395.2,278.7 402.7,317 398C355.3 393.3,395.5 369.5,416 349C436.5 328.5,436 300.2,440 275C444 249.8,445.5 218.2,440 198C434.5 177.8,415.3 167.8,407 154C398.7 140.2,384.5 116.2,390 115C395.5 113.8,423.3 126.2,440 147C456.7 167.8,481.7 206.3,490 240C498.3 273.7,503.8 314,490 349C476.2 384,437.7 430.8,407 450C376.3 469.2,343.7 466.3,306 464C268.3 461.7,215.8 452.2,181 436C146.2 419.8,115.2 396.7,97 367Z" fill="url(#eggWashGrad)" />
+                <path                        d="M81 151C91.5 125.3,110.5 109.7,124 98C137.5 86.3,145.3 85.7,162 81C178.7 76.3,194.5 70,224 70C253.5 70,305.8 71.5,339 81C372.2 90.5,405.8 101.7,423 127C440.2 152.3,442 197.2,442 233C442 268.8,437.3 312.2,423 342C408.7 371.8,379.3 399,356 412C332.7 425,317.5 423,283 420C248.5 417,180.7 407,149 394C117.3 381,107.7 365.7,93 342C78.3 318.3,63 283.8,61 252C59 220.2,70.5 176.7,81 151Z" fill="#FFEDED" />
                 <path className="egg-center" d="M182 246C184.5 233,189.5 225.5,197 215C204.5 204.5,214.5 190.7,227 183C239.5 175.3,256.2 170.2,272 169C287.8 167.8,306.5 168.3,322 176C337.5 183.7,355.5 200.7,365 215C374.5 229.3,379 245.7,379 262C379 278.3,373 298.2,365 313C357 327.8,344.2 342.8,331 351C317.8 359.2,302 362,286 362C270 362,248.8 357,235 351C221.2 345,211.8 335.7,203 326C194.2 316.3,185.5 306.3,182 293C178.5 279.7,179.5 259,182 246Z" fill="url(#follicleCoreGrad)" stroke="#E9B1B1" strokeWidth="1" />
                 <path                        d="M241 246C244.5 238.5,248.5 235,256 230C263.5 225,276.8 216.8,286 216C295.2 215.2,304.7 218.8,311 225C317.3 231.2,321.8 243.3,324 253C326.2 262.7,328.8 274.3,324 283C319.2 291.7,306.3 302.8,295 305C283.7 307.2,266 301,256 296C246 291,237.5 283.3,235 275C232.5 266.7,237.5 253.5,241 246Z" fill="#FFADAD" />
                 <path                        d="M228 233C228 238,234.7 246,239 246C243.3 246,248.8 238,254 233C259.2 228,264.3 218.8,270 216C275.7 213.2,285 217.5,288 216C291 214.5,291.8 208.5,288 207C284.2 205.5,273.2 205.5,265 207C256.8 208.5,245.2 211.7,239 216C232.8 220.3,228 228,228 233Z" fill="#FFE4E4" />
