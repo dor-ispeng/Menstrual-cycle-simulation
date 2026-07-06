@@ -227,15 +227,14 @@ type Props = {
 // traced from SVG/corp1.svg, SVG/corp2.svg and SVG/corp3.svg.
 //
 // Maps eggProgress (monotonic from Ovulation Decision through Continue/Restart)
-// to a single 0→2 stage value: 0 = corp1 fully formed (Ovulation Decision),
-// 1 = corp2 fully formed (After Release), 2 = corp3 fully formed (Preparation).
-// corp1 holds until halfway to After Release, then morphs into corp2, reaching
-// full form exactly at After Release. corp2 holds until a bit before halfway
-// to Preparation, then morphs into corp3, reaching full form exactly at
-// Preparation — and stays there (eggProgress keeps rising monotonically, so
-// nothing reverts after Preparation).
+// to a single 0→2 stage value: 0 = corp1, 1 = corp2 (After Release), 2 = corp3
+// (Preparation). corp1 forms as the follicle collapses just after Ovulation
+// Decision (see the collapse window in the component body), peaks ~0.12, then
+// morphs into corp2 by After Release (0.20). corp2 holds, then morphs into
+// corp3, reaching full form at Preparation (0.70) — and stays there
+// (eggProgress rises monotonically, so nothing reverts afterwards).
 function corpusStageFromEggProgress(eggProgress: number): number {
-  const HOLD1_END  = 0.10  // halfway between Ovulation Decision (0) and After Release (0.20)
+  const HOLD1_END  = 0.12  // corp1 peaks here, then morphs to corp2 by After Release (0.20)
   const MORPH1_END = 0.20  // After Release hard stop — corp2 fully formed
   const HOLD2_END  = 0.40  // a bit before halfway between After Release (0.20) and Preparation (0.70)
   const MORPH2_END = 0.70  // Preparation hard stop — corp3 fully formed
@@ -259,8 +258,6 @@ export default function AnatomyLayer({
   zoomLevel = 1,
   onStructureClick,
 }: Props) {
-  const eggVisible = eggProgress >= 0
-
   // Scale of the inner cavity mask that sits on top of the endometrium fill.
   // Smaller scale = thicker endometrium rim visible around it.
   // Range: ~0.85 (thin, early cycle) → ~0.55 (thick, secretory phase)
@@ -273,6 +270,17 @@ export default function AnatomyLayer({
   const tEgg = Math.max(0, Math.min(1, eggProgress))        // 0→1 after egg release
   const tCL  = Math.max(0, Math.min(1, corpusLuteumRadius)) // 0→1 CL maturity
 
+  // ── Post-ovulation collapse window ───────────────────────────────────────
+  // The intact Graafian follicle stays whole through the Ovulation Decision
+  // rest (eggProgress = 0), then buckles into corp1 over eggProgress 0 → 0.06.
+  // The follicle fades out across that window while corp1 fades in over
+  // 0 → 0.10, so corp1 emerges *from* the collapsing follicle rather than
+  // popping in. corp1 peaks ~0.12, then morphs on to corp2 by After Release.
+  const COLLAPSE_END    = 0.06
+  const follicleFadeOut = Math.min(1, Math.max(0, 1 - eggProgress / COLLAPSE_END)) // 1 at eP≤0 → 0 at eP≥0.06
+  const corp1FadeIn     = Math.min(1, Math.max(0, eggProgress / 0.10))             // 0 at eP=0 → 1 at eP≥0.10
+  const follicleVisible = eggProgress < COLLAPSE_END
+
   // Radius: grows as dominant, collapses on rupture, re-expands as CL
   let structR: number
   if (isPreOvulation) {
@@ -283,9 +291,9 @@ export default function AnatomyLayer({
     structR         = rupturedR + (CL_PEAK_R - rupturedR) * tCL  // ~52 → 62 px as CL matures
   }
 
-  // Corpus luteum evolution — corp1 (Ovulation Decision) → corp2 (After
-  // Release) → corp3 (Preparation), rendered by CorpusLuteumRosette as one
-  // continuously-morphing structure. See corpusStageFromEggProgress above.
+  // Corpus luteum evolution — corp1 (forms just after Ovulation Decision) →
+  // corp2 (After Release) → corp3 (Preparation), rendered by CorpusLuteumRosette
+  // as one continuously-morphing structure. See corpusStageFromEggProgress above.
   const corpusStageT = isPreOvulation ? 0 : corpusStageFromEggProgress(eggProgress)
 
   const showGranulosa = zoomLevel >= 2.5 && structR > 20 && isPreOvulation
@@ -293,14 +301,19 @@ export default function AnatomyLayer({
   // Dominant follicle visual evolution across competition→dominant→ovulation-decision stages.
   // follic3T: fades in the antral follicle look (granulosa wall ring + bump ring) starting
   //           a bit after competition (DR=0.63) and reaching full appearance by early dominant (DR=0.77).
-  // follic5T: fades in the Graafian follicle look (expanded antrum, cumulus oophorus) starting
-  //           a bit after dominant peak (DR=0.88) and fully developed before ovulation decision (DR=0.97).
-  const follic3T = isPreOvulation ? Math.min(1, Math.max(0, (dominantFollicleRadius - 0.63) / 0.14)) : 0
-  // follic5T also fades out as eggProgress approaches 0, so the Graafian look collapses
-  // before the actual rupture (starts fading at eP=-0.03, gone by eP=0).
-  const follic5T = isPreOvulation
-    ? Math.min(1, Math.max(0, (dominantFollicleRadius - 0.88) / 0.09)) * (eggProgress < -0.03 ? 1 : Math.max(0, -eggProgress / 0.03))
-    : 0
+  // follic5T: fades in the Graafian antrum look as the dominant follicle matures (DR 0.88→0.97) and —
+  //           crucially — HOLDS at full through the Ovulation Decision rest (eggProgress = 0), only
+  //           deflating over the collapse window (eggProgress 0 → 0.06) as the follicle buckles.
+  const follic3T = Math.min(1, Math.max(0, (dominantFollicleRadius - 0.63) / 0.14))
+  const follic5Base = Math.min(1, Math.max(0, (dominantFollicleRadius - 0.88) / 0.09))
+  const follic5T = eggProgress <= 0 ? follic5Base : follicleFadeOut
+
+  // Egg — a single constant-size egg.svg, present from the very first stage
+  // (in the dominant candidate follicle, even while it's still small) and never
+  // rescaled: the follicle grows around it, and after ovulation the same egg
+  // travels up the tube.  Replaces the old crossfading in-follicle oocyte.
+  // Pre-ovulation it sits at the follicle centre (eggPosition(0) === centre).
+  const eggVisible = eggProgress >= 0 || isPreOvulation   // always: in the follicle, then up the tube
 
   const [domFX, domFY] = FOLLICLE_POSITIONS[DOMINANT_IDX]
 
@@ -693,20 +706,20 @@ export default function AnatomyLayer({
         {structR > 0.5 && (
           <g
             style={{ cursor: 'pointer' }}
-            onClick={() => onStructureClick(isPreOvulation ? 'follicle' : 'corpus-luteum')}
+            onClick={() => onStructureClick(eggProgress < COLLAPSE_END ? 'follicle' : 'corpus-luteum')}
           >
-            {isPreOvulation && (
+            {follicleVisible && (
               /*
-                Pre-ovulation follicle: fades out in the last moment before
-                ovulation (eP -0.02 → 0), so corp1 can already be fully formed
-                at the Ovulation Decision hard stop.
+                Graafian follicle: stays fully intact through the Ovulation
+                Decision rest (eP = 0), then buckles/deflates and fades out
+                across the collapse window (eP 0 → 0.06) as corp1 forms.
               */
               <motion.g
                 key="dom-structure"
                 style={{ transformOrigin: `${domFX}px ${domFY}px` }}
                 animate={{ scale: structR / RECRUITED_R }}
                 transition={{ duration: 0.5 }}
-                opacity={0.94 * Math.min(1, Math.max(0, -eggProgress / 0.02))}
+                opacity={0.94 * follicleFadeOut}
               >
                 {/* 1 · Outer membrane */}
                 <circle cx={domFX} cy={domFY} r={RECRUITED_R} fill="url(#follicleOuterGrad)" />
@@ -858,65 +871,10 @@ export default function AnatomyLayer({
                 <ellipse cx={domFX + RECRUITED_R * 0.30} cy={domFY + RECRUITED_R * 0.32}
                   rx={RECRUITED_R * 0.09} ry={RECRUITED_R * 0.07} fill="#F8C8CC" opacity={0.16} />
 
-                {/* ── Cumulus oophorus (follic5) ────────────────────────────────────
-                    The oocyte suspended in antrum fluid by its cumulus cell envelope.
-                    Dome grows out from the core position and floats upward as the
-                    antrum expands — the cumulus-oocyte complex detaches from the
-                    granulosa wall and drifts freely in the fluid (medically accurate). */}
-                {follic5T > 0 && (
-                  <>
-                    <circle
-                      cx={domFX + RECRUITED_R * 0.25 * follic5T}
-                      cy={domFY - RECRUITED_R * 0.05 * follic5T}
-                      r={RECRUITED_R * (0.25 + follic5T * 0.09)}
-                      fill="#FFCECE"
-                      opacity={follic5T * 0.92}
-                    />
-                    <circle
-                      cx={domFX + RECRUITED_R * 0.25 * follic5T}
-                      cy={domFY - RECRUITED_R * 0.05 * follic5T}
-                      r={RECRUITED_R * (0.25 + follic5T * 0.09)}
-                      fill="url(#follicleShadeGrad)"
-                      opacity={follic5T * 0.45}
-                    />
-                  </>
-                )}
-
-                {/* 5 · Oocyte — gradient circle drifts rightward and crossfades into egg.svg */}
-                <circle
-                  cx={domFX + RECRUITED_R * 0.25 * follic5T}
-                  cy={domFY - RECRUITED_R * 0.05 * follic5T}
-                  r={RECRUITED_R * 0.24}
-                  fill="url(#follicleCoreGrad)"
-                  opacity={1 - follic5T}
-                />
-                {follic5T > 0 && (
-                  <g
-                    transform={`translate(${domFX + RECRUITED_R * (0.25 * follic5T - 0.24)}, ${domFY - RECRUITED_R * (0.05 * follic5T + 0.24)}) scale(${RECRUITED_R * 0.24 / 280})`}
-                    opacity={follic5T}
-                  >
-                    <path id="egg-outer"  d="M17 379C8.5 356.8,3.7 333,1 309C-1.7 285,-1.7 258.2,1 235C3.7 211.8,8.5 191.2,17 170C25.5 148.8,39.3 125.5,52 108C64.7 90.5,75.3 79.3,93 65C110.7 50.7,134.5 32.7,158 22C181.5 11.3,204.8 4.5,234 1C263.2 -2.5,301.2 -4.7,333 1C364.8 6.7,396.3 17.2,425 35C453.7 52.8,483.8 79.7,505 108C526.2 136.3,543 173.8,552 205C561 236.2,563.2 262.2,559 295C554.8 327.8,542.3 370.7,527 402C511.7 433.3,487 462,467 483C447 504,427.7 516.8,407 528C386.3 539.2,367.2 545.2,343 550C318.8 554.8,289.7 558.8,262 557C234.3 555.2,202.7 548.5,177 539C151.3 529.5,128.8 516.2,108 500C87.2 483.8,67.2 462.2,52 442C36.8 421.8,25.5 401.2,17 379Z" fill="url(#eggOuterGrad)" stroke="#FFEDED" strokeWidth="2" />
-                    <path id="egg-inner"  d="M34 212C38.5 189,52.3 158.3,56 156C59.7 153.7,56 180.5,56 198C56 215.5,55 236.8,56 261C57 285.2,51.2 315.7,62 343C72.8 370.3,95.5 401.2,121 425C146.5 448.8,172.2 477.7,215 486C257.8 494.3,338.8 485.2,378 475C417.2 464.8,430.5 448.7,450 425C469.5 401.3,486.3 364,495 333C503.7 302,504.7 266.3,502 239C499.3 211.7,489 189.7,479 169C469 148.3,455.7 131.3,442 115C428.3 98.7,414.5 83.3,397 71C379.5 58.7,361.8 46,337 41C312.2 36,275.5 41,248 41C220.5 41,172 44.5,172 41C172 37.5,217.7 21.5,248 20C278.3 18.5,322.7 22.3,354 32C385.3 41.7,411.3 57.3,436 78C460.7 98.7,487 126.3,502 156C517 185.7,523.2 224,526 256C528.8 288,526.8 319.8,519 348C511.2 376.2,496.2 401,479 425C461.8 449,441.2 475.5,416 492C390.8 508.5,360 519.7,328 524C296 528.3,256.8 524.3,224 518C191.2 511.7,156 499,131 486C106 473,86.5 458.3,74 440C61.5 421.7,63.5 400.3,56 376C48.5 351.7,32.7 321.3,29 294C25.3 266.7,29.5 235,34 212Z" fill="#FFCECE" fillOpacity={0.4} />
-                    <path                 d="M97 367C78.8 337.3,77 280.8,72 258C67 235.2,60.8 224.8,67 230C73.2 235.2,89.2 264.5,109 289C128.8 313.5,151.3 358.8,186 377C220.7 395.2,278.7 402.7,317 398C355.3 393.3,395.5 369.5,416 349C436.5 328.5,436 300.2,440 275C444 249.8,445.5 218.2,440 198C434.5 177.8,415.3 167.8,407 154C398.7 140.2,384.5 116.2,390 115C395.5 113.8,423.3 126.2,440 147C456.7 167.8,481.7 206.3,490 240C498.3 273.7,503.8 314,490 349C476.2 384,437.7 430.8,407 450C376.3 469.2,343.7 466.3,306 464C268.3 461.7,215.8 452.2,181 436C146.2 419.8,115.2 396.7,97 367Z" fill="#FFEDED" />
-                    <path                 d="M81 151C91.5 125.3,110.5 109.7,124 98C137.5 86.3,145.3 85.7,162 81C178.7 76.3,194.5 70,224 70C253.5 70,305.8 71.5,339 81C372.2 90.5,405.8 101.7,423 127C440.2 152.3,442 197.2,442 233C442 268.8,437.3 312.2,423 342C408.7 371.8,379.3 399,356 412C332.7 425,317.5 423,283 420C248.5 417,180.7 407,149 394C117.3 381,107.7 365.7,93 342C78.3 318.3,63 283.8,61 252C59 220.2,70.5 176.7,81 151Z" fill="#FFF4F4" />
-                    <path id="egg-center" d="M182 246C184.5 233,189.5 225.5,197 215C204.5 204.5,214.5 190.7,227 183C239.5 175.3,256.2 170.2,272 169C287.8 167.8,306.5 168.3,322 176C337.5 183.7,355.5 200.7,365 215C374.5 229.3,379 245.7,379 262C379 278.3,373 298.2,365 313C357 327.8,344.2 342.8,331 351C317.8 359.2,302 362,286 362C270 362,248.8 357,235 351C221.2 345,211.8 335.7,203 326C194.2 316.3,185.5 306.3,182 293C178.5 279.7,179.5 259,182 246Z" fill="url(#follicleCoreGrad)" stroke="#E9B1B1" strokeWidth="1" />
-                    <path                 d="M241 246C244.5 238.5,248.5 235,256 230C263.5 225,276.8 216.8,286 216C295.2 215.2,304.7 218.8,311 225C317.3 231.2,321.8 243.3,324 253C326.2 262.7,328.8 274.3,324 283C319.2 291.7,306.3 302.8,295 305C283.7 307.2,266 301,256 296C246 291,237.5 283.3,235 275C232.5 266.7,237.5 253.5,241 246Z" fill="#FFADAD" />
-                    <path                 d="M228 233C228 238,234.7 246,239 246C243.3 246,248.8 238,254 233C259.2 228,264.3 218.8,270 216C275.7 213.2,285 217.5,288 216C291 214.5,291.8 208.5,288 207C284.2 205.5,273.2 205.5,265 207C256.8 208.5,245.2 211.7,239 216C232.8 220.3,228 228,228 233Z" fill="#FFE4E4" />
-                  </g>
-                )}
-
-                {/* Cumulus oophorus highlight (follic5) */}
-                {follic5T > 0 && (
-                  <ellipse
-                    cx={domFX + RECRUITED_R * 0.25 * follic5T - RECRUITED_R * 0.08}
-                    cy={domFY - RECRUITED_R * 0.05 * follic5T - RECRUITED_R * (0.20 + follic5T * 0.06)}
-                    rx={RECRUITED_R * 0.13}
-                    ry={RECRUITED_R * 0.09}
-                    fill="#FFFFFF"
-                    opacity={follic5T * 0.55}
-                  />
-                )}
-
+                {/* The oocyte / cumulus-oocyte complex is now drawn once as a
+                    constant-size egg.svg in the EggGroup below (identical from
+                    the dominant follicle through tube travel), so the old
+                    crossfading in-follicle oocyte and cumulus dome are gone. */}
                 {/* 6 · Specular — (-0.09, -0.19) unique to dominant follicle */}
                 <ellipse
                   cx={domFX - RECRUITED_R * 0.09} cy={domFY - RECRUITED_R * 0.19}
@@ -925,12 +883,14 @@ export default function AnatomyLayer({
                 />
               </motion.g>
             )}
-            {!isPreOvulation && (
-              /* Post-ovulation: corp1 (Ovulation Decision) → corp2 (After
-                 Release) → corp3 (Preparation), one continuous structure. */
+            {eggProgress >= 0 && (
+              /* Post-ovulation: corp1 forms as the follicle collapses (fading
+                 in over the collapse window), then morphs corp2 → corp3.  One
+                 continuous structure. */
               <CorpusLuteumRosette
                 cx={domFX} cy={domFY} R={structR}
                 stageT={corpusStageT}
+                opacity={corp1FadeIn}
               />
             )}
           </g>
