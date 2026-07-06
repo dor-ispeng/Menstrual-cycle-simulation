@@ -7,17 +7,23 @@
 //   → corp2 (forming ring, fully formed at After Release)
 //   → corp3 (mature rosette, fully formed at Preparation)
 //
-// The lobed silhouettes below are traced directly from the reference vector
-// files (SVG/corp1.svg, SVG/corp2.svg, SVG/corp3.svg) rather than synthesized
-// from sine waves, so the outline is biologically grounded. All three shapes
-// are resampled to the same angular resolution (SAMPLES) so `stageT` performs
-// a genuine point-by-point interpolation of one silhouette into the next —
-// the tissue reads as forming/twisting/thickening inward, not as images
-// crossfading. corp1 has no real internal cavity yet (freshly ruptured,
-// solid clot), so it carries a synthetic near-zero "hole" profile that opens
-// up into corp2's real ring as the corp1→corp2 morph proceeds. Colour, cavity
-// fill, fold texture and highlight placement are all driven by the same
-// stage parameter and tuned against corp2_ref.png / corp3_ref.png for the
+// corp2 and corp3's lobed silhouettes are traced directly from the reference
+// vector files (SVG/corp2.svg, SVG/corp3.svg) rather than synthesized from
+// sine waves, so their outline is biologically grounded. corp1 is different:
+// it's an open "C"-shaped crescent (the follicle's rupture point hasn't
+// sealed yet, matching corp1_ref.png) representing collapsed tissue under
+// slight tension, and is built as a continuous low-frequency spline (see
+// buildCollapsedMembraneShape) rather than resampled from traced vertices —
+// densely resampling the hand-drawn polygon baked in every small notch of
+// the source art and read as faceted/zig-zaggy. All three shapes share the
+// same angular resolution (SAMPLES) so `stageT` performs a genuine
+// point-by-point interpolation of one silhouette into the next — the tissue
+// reads as forming/twisting/thickening inward, not as images crossfading.
+// corp1's real opening tapers smoothly to zero width at each tip (no
+// polygonal pinch); that taper is what visibly "closes" into corp2's full
+// ring as the corp1→corp2 morph proceeds. Colour, cavity fill, fold texture
+// and highlight placement are all driven by the same stage parameter and
+// tuned against corp1_ref.png / corp2_ref.png / corp3_ref.png for the
 // painterly shading, softness and gradients.
 
 type Pt = [number, number]
@@ -73,6 +79,22 @@ function catmullRomClosed(pts: Pt[]): string {
   return d + 'Z'
 }
 
+// Open (non-wrapping) Catmull-Rom — for stroking an arc segment without
+// closing it back on itself, so a boundary can be split at a gap without a
+// stray line cutting across the opening.
+function catmullRomOpen(pts: Pt[]): string {
+  const n = pts.length
+  if (n < 2) return ''
+  let d = `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(n - 1, i + 2)]
+    const cp1x = p1[0] + (p2[0] - p0[0]) / 6, cp1y = p1[1] + (p2[1] - p0[1]) / 6
+    const cp2x = p2[0] - (p3[0] - p1[0]) / 6, cp2y = p2[1] - (p3[1] - p1[1]) / 6
+    d += ` C${cp1x.toFixed(1)} ${cp1y.toFixed(1)},${cp2x.toFixed(1)} ${cp2y.toFixed(1)},${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`
+  }
+  return d
+}
+
 function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16)
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
@@ -90,6 +112,9 @@ interface ShapeData {
   outerProfile: number[]
   innerProfile: number[]
   highlights: { angle: number; rFrac: number }[]
+  /** Index range (into the SAMPLES-length profile arrays) of a real open
+   *  gap, if this shape has one — only corp1's crescent does. */
+  gapRange?: [number, number]
 }
 
 function highlightsFromGroups(groups: Pt[][], center: Pt, refR: number) {
@@ -108,35 +133,137 @@ function buildShape(outerPts: Pt[], innerPts: Pt[], highlightGroups: Pt[][]): Sh
   return { outerProfile, innerProfile, highlights: highlightsFromGroups(highlightGroups, center, refR) }
 }
 
-// corp1 has no traced inner boundary — it's a solid, freshly-ruptured clot
-// with no open cavity yet. A tiny constant "hole" profile stands in for that
-// (imperceptible on its own) so it can smoothly open up into corp2's real
-// ring as the corp1→corp2 morph proceeds.
-function buildSolidShape(outerPts: Pt[], highlightGroups: Pt[][]): ShapeData {
-  const center = centroidOf(outerPts)
-  const refR = meanRadius(outerPts, center)
-  const outerProfile = toPolarProfile(outerPts, center, refR, SAMPLES)
+// Circular 1-2-1 moving-average — softens the sharp local corners that
+// nearest-angle resampling of a hand-traced polygon introduces (each vertex
+// becomes a hard V in the profile) into rounded bumps, without discarding
+// the traced silhouette's actual lobe count/placement.
+function smoothProfileCircular(profile: number[], passes: number): number[] {
+  let p = profile
+  const n = p.length
+  for (let pass = 0; pass < passes; pass++) {
+    const next = new Array(n)
+    for (let i = 0; i < n; i++) {
+      next[i] = (p[(i - 1 + n) % n] + p[i] * 2 + p[(i + 1) % n]) / 4
+    }
+    p = next
+  }
+  return p
+}
+
+function angularDistance(a: number, b: number): number {
+  let d = Math.abs(a - b) % (Math.PI * 2)
+  if (d > Math.PI) d = Math.PI * 2 - d
+  return d
+}
+
+// Cubic ease, zero slope at both ends — used everywhere a value needs to
+// ease smoothly between two states with no corner (C1-continuous), instead
+// of a linear ramp or a hard cutoff.
+function smoothstep(t: number): number {
+  const c = Math.max(0, Math.min(1, t))
+  return c * c * (3 - 2 * c)
+}
+
+// A single smooth, compact-support bump — zero and zero-slope at
+// ±halfWidth, peaking at `amplitude` at the centre (a raised cosine). This
+// is the building block for both the centerline's folds and the tip
+// closure: everything is C¹-continuous, so nothing ever meets at a corner.
+function raisedCosineBump(d: number, halfWidth: number): number {
+  if (d >= halfWidth) return 0
+  return 0.5 * (1 + Math.cos((Math.PI * d) / halfWidth))
+}
+
+// A small number of broad folds, each with its own hand-set amplitude and
+// angular width — deliberately irregular (not evenly spaced, not a shared
+// frequency) so the silhouette reads as organically folded tissue rather
+// than a mathematically regular ripple. Angles are degrees for readability
+// (converted below); 0° points screen-right, matching corp1_ref.png's
+// opening direction.
+const CORP1_FOLDS: { angle: number; amplitude: number; halfWidth: number }[] = [
+  { angle: 172, amplitude: 0.20, halfWidth: 48 },  // the big rounded lobe opposite the opening
+  { angle: 96, amplitude: 0.11, halfWidth: 34 },
+  { angle: 246, amplitude: 0.14, halfWidth: 38 },
+  { angle: 46, amplitude: 0.07, halfWidth: 26 },
+  { angle: 298, amplitude: 0.08, halfWidth: 24 },
+]
+
+// corp1 is collapsed follicular tissue under slight tension, not a faceted
+// ring. It's built the way a folded ribbon actually is: a smooth centerline
+// spline (its radius is a base value plus a handful of broad, irregular
+// fold bumps — CORP1_FOLDS) with the outer/inner boundaries offset from
+// that centerline by a slowly-varying half-width. The folds live in the
+// centerline itself, so both boundaries bow together where the tissue
+// folds — not two independently-wobbling curves. Near the opening the
+// half-width eases to zero via smoothstep (C¹-continuous, no corner), so
+// both boundaries curve into a shared, rounded point at each tip — an
+// organic taper, not a pinch. Silhouette proportions (opening direction and
+// width, the big lobe opposite it, overall size) are tuned to match
+// corp1_ref.png / SVG/corp1.svg's shape language; nothing here is resampled
+// from that file's traced vertices.
+function buildCollapsedMembraneShape(): ShapeData {
+  const GAP_CENTER = -0.16          // opening faces right, slightly upward on screen
+  const GAP_HALF = 0.22             // half-width of the fully-collapsed (zero-width) span
+  const TAPER_HALF = 0.62           // half-width of the broader easing zone around it
+  const CENTER_BASE = 0.80          // centerline's resting radius
+  const WIDTH_BASE = 0.20           // resting wall half-width (outer/inner offset each side)
+
+  const foldsRad = CORP1_FOLDS.map((f) => ({
+    angle: (f.angle * Math.PI) / 180,
+    amplitude: f.amplitude,
+    halfWidth: (f.halfWidth * Math.PI) / 180,
+  }))
+
+  const centerlineRadius = (theta: number): number => {
+    let r = CENTER_BASE
+    for (const f of foldsRad) r += f.amplitude * raisedCosineBump(angularDistance(theta, f.angle), f.halfWidth)
+    return r
+  }
+
+  // Wall half-width varies on its own slow, single-harmonic curve —
+  // independent of the centerline's folds, so thickness isn't just a fixed
+  // offset from the silhouette.
+  const wallHalfWidth = (theta: number): number => WIDTH_BASE + 0.03 * Math.cos(2 * theta + 0.8)
+
+  const outerProfile: number[] = []
+  const innerProfile: number[] = []
+  for (let i = 0; i < SAMPLES; i++) {
+    const theta = (i / SAMPLES) * Math.PI * 2 - Math.PI
+    const center = centerlineRadius(theta)
+
+    const d = angularDistance(theta, GAP_CENTER)
+    let closure = 1
+    if (d <= GAP_HALF) {
+      closure = 0
+    } else if (d < TAPER_HALF) {
+      closure = smoothstep((d - GAP_HALF) / (TAPER_HALF - GAP_HALF))
+    }
+
+    const half = wallHalfWidth(theta) * closure
+    outerProfile.push(center + half)
+    innerProfile.push(center - half)
+  }
+
+  // The fully-collapsed span (closure === 0 exactly) is what the stroke
+  // treats as the real opening — see splitAtGap / gapRange usage below.
+  const gapIdx: number[] = []
+  for (let i = 0; i < SAMPLES; i++) {
+    const theta = (i / SAMPLES) * Math.PI * 2 - Math.PI
+    if (angularDistance(theta, GAP_CENTER) <= GAP_HALF) gapIdx.push(i)
+  }
+
   return {
     outerProfile,
-    innerProfile: new Array(SAMPLES).fill(0.03),
-    highlights: highlightsFromGroups(highlightGroups, center, refR),
+    innerProfile,
+    highlights: [],
+    gapRange: [gapIdx[0], gapIdx[gapIdx.length - 1]],
   }
 }
 
-// ── traced vertex data (SVG/corp1.svg, SVG/corp2.svg, SVG/corp3.svg) ─────
+// ── traced vertex data (SVG/corp2.svg, SVG/corp3.svg) ────────────────────
 // Coordinates lifted directly from each file's path `d` — outer-body
 // boundary, inner-cavity/hole boundary, and the small sheen-patch groups —
-// so the overall silhouette and lobe placement match the source art.
-
-// corp1.svg — corpus hemorrhagicum ("Ovulation Decision"): solid clot, no cavity yet
-const CORP1_OUTER: Pt[] = [
-  [633, 664], [685, 585], [656, 578], [628, 600], [597, 613], [558, 628], [511, 620], [489, 642], [458, 637],
-  [429, 640], [383, 644], [337, 626], [321, 607], [289, 610], [266, 592], [249, 563], [233, 534], [185, 514],
-  [182, 488], [189, 454], [187, 424], [175, 399], [172, 371], [188, 325], [187, 315], [225, 288], [237, 263],
-  [256, 231], [302, 227], [323, 211], [342, 181], [362, 180], [418, 175], [454, 172], [470, 150], [487, 135],
-  [515, 132], [544, 144], [589, 160], [647, 155], [525, 85], [410, 81], [259, 122], [177, 196], [97, 275],
-  [67, 408], [77, 524], [197, 660], [331, 722], [449, 754], [578, 701],
-]
+// so the overall silhouette and lobe placement match the source art. corp1
+// is built procedurally instead (see buildCollapsedMembraneShape above).
 
 // corp2.svg — thin forming ring ("After Release"): outer + inner boundary
 const CORP2_OUTER: Pt[] = [
@@ -213,9 +340,17 @@ const CORP3_HIGHLIGHTS: Pt[][] = [
   [[225, 80], [246, 80], [271, 80], [280, 102], [265, 114], [249, 114], [230, 102]],
 ]
 
-const CORP1_SHAPE = buildSolidShape(CORP1_OUTER, [])
+const CORP1_SHAPE = buildCollapsedMembraneShape()
 const CORP2_SHAPE = buildShape(CORP2_OUTER, CORP2_INNER, CORP2_HIGHLIGHTS)
-const CORP3_SHAPE = buildShape(CORP3_OUTER, CORP3_INNER, CORP3_HIGHLIGHTS)
+// corp3's traced polygon has ~15 real lobes, but nearest-angle resampling
+// turns each vertex into a hard V; a light circular smoothing pass rounds
+// those into soft bumps (matching corp3_ref.png) without losing the lobes.
+const CORP3_SHAPE_TRACED = buildShape(CORP3_OUTER, CORP3_INNER, CORP3_HIGHLIGHTS)
+const CORP3_SHAPE: ShapeData = {
+  ...CORP3_SHAPE_TRACED,
+  outerProfile: smoothProfileCircular(CORP3_SHAPE_TRACED.outerProfile, 3),
+  innerProfile: smoothProfileCircular(CORP3_SHAPE_TRACED.innerProfile, 3),
+}
 
 // ── gradient stop palettes (kept consistent with the rest of AnatomyLayer) ─
 
@@ -247,6 +382,18 @@ function profileToPoints(cx: number, cy: number, R: number, profile: number[]): 
 
 function lerpProfile(a: number[], b: number[], t: number): number[] {
   return a.map((v, i) => v + (b[i] - v) * t)
+}
+
+// Splits a closed ring of points at [gapLo, gapHi] into two open arcs — the
+// gap span itself, and everything else (wrapping around through index 0)
+// as one continuous arc — so the gap span can be stroked separately (and
+// faded independently) instead of drawing one unbroken line around a shape
+// that has a real opening in it.
+function splitAtGap(pts: Pt[], gapLo: number, gapHi: number): { main: Pt[]; gap: Pt[] } {
+  return {
+    main: [...pts.slice(gapHi + 1), ...pts.slice(0, gapLo + 1)],
+    gap: pts.slice(gapLo, gapHi + 1),
+  }
 }
 
 // ── fold texture (corp2→corp3 fibrous striations) ─────────────────────────
@@ -343,6 +490,14 @@ export default function CorpusLuteumRosette({
   const innerPts = profileToPoints(cx, cy, R, innerProfile)
   const d = catmullRomClosed(outerPts) + ' ' + catmullRomClosed(innerPts)
 
+  // corp1's crescent has a real opening — while it's still (partly) open,
+  // the rim shouldn't trace a continuous line across it, or the gap reads
+  // as a closed ring with a lighter centre instead of an actual opening.
+  // Stroke that span separately, faded by how much the opening has closed
+  // (localT: 0 = fully open/transparent at pure corp1, 1 = fully closed —
+  // matching corp2, which has no gap left to hide).
+  const gapRange = inFirstHalf ? CORP1_SHAPE.gapRange : undefined
+
   const rimStroke = lerpHex(rimA, rimB, localT)
   // Fibrous scar tissue (cavity fill / fold texture) only appears as the CL
   // matures past corp2 into corp3 — absent through corp1 and the corp1→corp2
@@ -382,18 +537,37 @@ export default function CorpusLuteumRosette({
         d={d}
         fillRule="evenodd"
         fill={`url(#${id}-outer)`}
-        stroke={rimStroke}
+        stroke={gapRange ? 'none' : rimStroke}
         strokeWidth={1 + maturity * 0.4}
       />
 
-      {/* Cavity fill — fades and grows in as folded tissue thickens inward */}
+      {/* Rim stroke, split at corp1's real opening so the line doesn't cut
+          across it — the gap segment fades in as the opening closes. */}
+      {gapRange && (() => {
+        const [gapLo, gapHi] = gapRange
+        const outerSplit = splitAtGap(outerPts, gapLo, gapHi)
+        const innerSplit = splitAtGap(innerPts, gapLo, gapHi)
+        const w = 1 + maturity * 0.4
+        return (
+          <>
+            <path d={catmullRomOpen(outerSplit.main)} fill="none" stroke={rimStroke} strokeWidth={w} strokeLinecap="round" />
+            <path d={catmullRomOpen(innerSplit.main)} fill="none" stroke={rimStroke} strokeWidth={w} strokeLinecap="round" />
+            <path d={catmullRomOpen(outerSplit.gap)} fill="none" stroke={rimStroke} strokeWidth={w} strokeLinecap="round" opacity={localT} />
+            <path d={catmullRomOpen(innerSplit.gap)} fill="none" stroke={rimStroke} strokeWidth={w} strokeLinecap="round" opacity={localT} />
+          </>
+        )
+      })()}
+
+      {/* Cavity fill — follows the actual traced inner boundary (the same
+          hole the outer path's evenodd cuts), not an independent circle, so
+          there's no mismatched ring of transparency between them. */}
       {cavityOpacity > 0.01 && (
         <>
-          <circle cx={cx} cy={cy} r={R * (0.40 + corp2to3T * 0.04)} fill={`url(#${id}-cavity)`} opacity={cavityOpacity} />
-          <circle
-            cx={cx} cy={cy} r={R * (0.42 + corp2to3T * 0.04)}
+          <path d={catmullRomClosed(innerPts)} fill={`url(#${id}-cavity)`} opacity={cavityOpacity} />
+          <path
+            d={catmullRomClosed(innerPts)}
             fill="none" stroke="#C07840"
-            strokeWidth={R * 0.05} strokeOpacity={cavityOpacity * 0.4}
+            strokeWidth={R * 0.035} strokeOpacity={cavityOpacity * 0.4}
           />
         </>
       )}
