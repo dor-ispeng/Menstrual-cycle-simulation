@@ -1,27 +1,43 @@
 'use client'
 
-import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import { motion, animate } from 'framer-motion'
 import CorpusLuteumRosette from './CorpusLuteumRosette'
+import { endometriumMorph } from '@/data/endometrium'
+
+// ── Shared uterus-artwork placement box ──────────────────────────────────────
+// The uterus+tube PNG (public/uterofallop.png) and the endometrium SVG data
+// (src/data/endometrium.ts) are both exported from the SAME 1491×1055 Figma
+// frame. This box is the single source of truth for placing both: the PNG
+// <image> uses these values directly as x/y/width/height; the endometrium
+// group derives its transform from the same numbers (translate + the scale
+// implied by width/height vs. the shared native size) so the two can never
+// drift out of registration.
+const UTERUS_ART_NATIVE_W = 1491
+const UTERUS_ART_NATIVE_H = 1055
+const UTERUS_ART_X = -213
+const UTERUS_ART_Y = -88
+const UTERUS_ART_W = 1548
+const UTERUS_ART_H = 1096
 
 // ── Canvas: 1400 × 900 ──────────────────────────────────────────────────────
 // Composition (left→right):
-//   Uterus  : complete pear-oval, fully within canvas (left edge x≈30)
-//   Tube    : thick stroke sweeping from uterus upper-right → top-right → curls
-//             back left, fimbriae end at ~(1110,618) facing the ovary
-//   Ovary   : organic oval at (880,630), rx=185, ry=150
+//   Uterus  : connected uterus+tube PNG (public/uterofallop.png), left edge x≈30
+//   Tube    : part of the same PNG, arching up-right then hooking down into
+//             fimbriae that end at ~(1089,498), just above the ovary
+//   Ovary   : organic oval at (830,630), rx=185, ry=150
 //   Follicles / dominant / corpus luteum: all inside ovary
 //   Egg     : travels from dominant follicle to fimbriae opening, then up tube
 
 // ── Uterus ───────────────────────────────────────────────────────────────────
+// Uterus + fallopian tube are now a single connected PNG (public/uterofallop.png).
+// Invisible click-target paths below stand in for the old UTERUS_OUTER geometry.
+// The endometrium lining (previously UTERUS_CAVITY-based) is handled in a
+// follow-up pass — only an invisible cavity click-target remains for now.
 
-// Approximate centroid of the cavity shape — used as transform-origin for the
-// endometrium rim scale so the rim stays visually uniform on all sides.
-const UTERUS_CX = 295
-const UTERUS_CY = 490
-
-// Outer myometrium wall — complete pear-oval, leftmost x≈30, fully within canvas.
-// Right side and tube-connection point (590,215) are unchanged.
-const UTERUS_OUTER =
+// Invisible click target covering the uterus body (approximates the PNG's
+// uterus silhouette). Not used for rendering — fill is transparent.
+const UTERUS_HIT =
   'M 590,215 ' +
   'C 645,255 665,355 665,470 ' +
   'C 665,585 645,695 590,755 ' +
@@ -30,51 +46,32 @@ const UTERUS_OUTER =
   'C 30,280 60,65 220,65 ' +
   'C 360,65 500,135 590,215 Z'
 
-// Uterine cavity — inner space enclosed by the myometrium.
-// Left side shifted to x≈120 to maintain ~90 px of wall on the left
-// (matching the right-side wall of 665−478 = 187 px proportionally).
-// Right side, top, and bottom segments are unchanged.
-const UTERUS_CAVITY =
-  'M 420,255 ' +
-  'C 458,278 478,360 478,458 ' +
-  'C 478,572 438,662 378,712 ' +
-  'C 318,758 234,772 170,748 ' +
-  'C 130,735 120,612 120,480 ' +
-  'C 120,340 130,240 170,217 ' +
-  'C 234,202 392,232 420,255 Z'
-
-// Endometrial lining — same shape, animated scale from uterus centre
-const ENDO_PATH = UTERUS_CAVITY
-const ENDO_ORIGIN = `${UTERUS_CX}px ${UTERUS_CY}px`
-
 // ── Fallopian tube ────────────────────────────────────────────────────────────
 
-// Four-segment cubic bezier: exits uterus upper-right, arcs across the top,
-// curves down-right, then curls back left toward the ovary
+// Four-segment cubic bezier tracing the NEW uterofallop.png tube centerline:
+// exits uterus upper-right (uterine junction), arcs across the top, curves
+// down-right through the hook, then curls back left into the fimbriae
+// opening. Control points tuned against the rendered PNG in-browser.
 const TUBE_PATH =
-  'M 580,290 ' +
-  'C 660,210 780,148 920,133 ' +
-  'C 1058,118 1200,168 1285,268 ' +
-  'C 1345,342 1360,432 1325,508 ' +
-  'C 1288,588 1198,628 1110,618'
-
-// Fimbriae — five finger projections from tube end (1110,618) curving toward
-// the RIGHT SURFACE of the ovary.  Tips are verified to be outside the new
-// ovary boundary (center 830,630; rx≈185, ry≈150; right edge x≈1015).
-// A visible 15–55 px gap separates each tip from the ovary surface.
-const FIMBRIAE = [
-  'M 1110,618 C 1095,595 1055,535 1010,525',  // upper   — tip (1010,525)
-  'M 1110,618 C 1092,604 1060,568 1025,568',  // mid-top  — tip (1025,568)
-  'M 1110,618 C 1085,618 1065,628 1032,630',  // center   — tip (1032,630)
-  'M 1110,618 C 1092,632 1060,668 1025,685',  // mid-bot  — tip (1025,685)
-  'M 1110,618 C 1095,645 1055,695 1010,710',  // lower    — tip (1010,710)
-]
+  'M 514,390 ' +
+  'C 580,320 650,230 722,188 ' +
+  'C 820,150 950,110 1044,114 ' +
+  'C 1120,118 1170,140 1160,280 ' +
+  'C 1150,380 1120,460 1089,498'
 
 // ── Ovary ─────────────────────────────────────────────────────────────────────
 
+// Shifts the whole ovary group (ovary + follicles + corpus luteum + glow) so
+// the ovary's upper-right edge sits under the fimbriae opening at (1089,498).
+// Positive x = right, negative y = up. Applied via a single wrapper <g>
+// transform in the render tree — the coordinates below stay unchanged.
+const OVARY_DX = -18
+const OVARY_DY = -118
+
 // Bezier-approximated ellipse (rx=185, ry=150, Bézier factor ≈ 0.5523)
-// Shifted 50 px left from the original (880,630) centre so the right edge
-// sits at x≈1015, giving a clear anatomical gap to the tube end at (1110,618).
+// Centred at (830,630) so the right edge sits at x≈1015, giving a clear
+// anatomical gap to the fimbriae opening at (1089,498). Actual on-screen
+// position is offset by OVARY_DX/OVARY_DY via the wrapper group.
 const OVARY_PATH =
   'M 830,480 ' +
   'C 932,480 1015,547 1015,630 ' +
@@ -199,10 +196,10 @@ const FOLLICLE_SHADE_OPACITY: Record<number, number> = {
 // ── Egg travel: arc-length parameterized along the fallopian tube ────────────
 // Pre-sampled once at module load. No DOM or ref needed.
 //
-// The egg follows: dominant follicle (895,615)
-//   → fimbriae opening (1110,618)   [linear approach, T_APPROACH fraction]
+// The egg follows: dominant follicle (845,615)
+//   → fimbriae opening (1089,498)   [linear approach, T_APPROACH fraction]
 //   → along reversed tube beziers   [arc-length parameterized]
-//   → uterine junction (580,290)
+//   → uterine junction (514,390)
 
 type Pt2 = [number, number]
 
@@ -214,21 +211,21 @@ function evalCubic(u: number, p0: Pt2, p1: Pt2, p2: Pt2, p3: Pt2): Pt2 {
   ]
 }
 
-// Reversed fallopian tube segments (fimbriae end → uterine end).
+// Reversed fallopian tube segments (fimbriae opening → uterine junction).
 // Each entry reverses one segment of TUBE_PATH: swap P0↔P3, swap P1↔P2.
 const EGG_TUBE_SEGS: [Pt2, Pt2, Pt2, Pt2][] = [
-  [[1110,618],[1198,628],[1288,588],[1325,508]],  // rev seg4
-  [[1325,508],[1360,432],[1345,342],[1285,268]],  // rev seg3
-  [[1285,268],[1200,168],[1058,118],[920,133]],   // rev seg2
-  [[920,133], [780,148], [660,210], [580,290]],   // rev seg1
+  [[1089,498], [1120,460], [1150,380], [1160,280]],  // rev seg4
+  [[1160,280], [1170,140], [1120,118], [1044,114]],  // rev seg3
+  [[1044,114], [950,110],  [820,150],  [722,188]],   // rev seg2
+  [[722,188],  [650,230],  [580,320],  [514,390]],   // rev seg1
 ]
 
 // d attribute for the invisible SVG guide path (matches EGG_TUBE_SEGS)
 const EGG_GUIDE_D =
-  'M 1110,618 C 1198,628 1288,588 1325,508 ' +
-  'C 1360,432 1345,342 1285,268 ' +
-  'C 1200,168 1058,118 920,133 ' +
-  'C 780,148 660,210 580,290'
+  'M 1089,498 C 1120,460 1150,380 1160,280 ' +
+  'C 1170,140 1120,118 1044,114 ' +
+  'C 950,110 820,150 722,188 ' +
+  'C 650,230 580,320 514,390'
 
 // Build arc-length table — 25 uniform samples per segment
 const _N = 25
@@ -238,7 +235,7 @@ for (const [p0, p1, p2, p3] of EGG_TUBE_SEGS) {
     _tubePts.push(evalCubic(k / _N, p0, p1, p2, p3))
   }
 }
-_tubePts.push([580, 290])
+_tubePts.push([514, 390])
 
 const _arcs: number[] = [0]
 for (let i = 1; i < _tubePts.length; i++) {
@@ -268,8 +265,12 @@ const T_APPROACH = 0.18
 function eggPosition(t: number): Pt2 {
   if (t <= T_APPROACH) {
     const frac = t / T_APPROACH
-    // dominant follicle is at FOLLICLE_POSITIONS[DOMINANT_IDX] = (845, 615)
-    return [845 + (1110 - 845) * frac, 615 + (618 - 615) * frac]
+    // dominant follicle is at FOLLICLE_POSITIONS[DOMINANT_IDX] = (845, 615),
+    // shifted by the ovary-group offset (OVARY_DX, OVARY_DY) since EggGroup
+    // sits outside that wrapper. Approaching the fimbriae opening at (1089, 498).
+    const startX = 845 + OVARY_DX
+    const startY = 615 + OVARY_DY
+    return [startX + (1089 - startX) * frac, startY + (498 - startY) * frac]
   }
   return sampleTube((t - T_APPROACH) / (1 - T_APPROACH))
 }
@@ -325,10 +326,21 @@ export default function AnatomyLayer({
   zoomLevel = 1,
   onStructureClick,
 }: Props) {
-  // Scale of the inner cavity mask that sits on top of the endometrium fill.
-  // Smaller scale = thicker endometrium rim visible around it.
-  // Range: ~0.85 (thin, early cycle) → ~0.55 (thick, secretory phase)
-  const innerCavityScale = 0.96 - endometriumThickness * 0.43
+  // Reserved for a future progesterone-driven secretory-phase tint on the
+  // endometrium — not yet wired to any visual.
+  void progesteroneLevel
+
+  // Endometrium lining — eases toward the target thickness so timeline-anchor
+  // jumps morph smoothly instead of snapping.
+  const [shownThickness, setShownThickness] = useState(endometriumThickness)
+  useEffect(() => {
+    const controls = animate(shownThickness, endometriumThickness, {
+      duration: 0.5, ease: 'easeInOut', onUpdate: (v) => setShownThickness(v),
+    })
+    return () => controls.stop()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endometriumThickness])
+  const endo = endometriumMorph(shownThickness)
 
   // ── Persistent dominant structure: follicle → ruptured follicle → CL ────
   // One SVG element lives here through the entire lifecycle.
@@ -462,46 +474,15 @@ export default function AnatomyLayer({
           which blends its own stop colours by stageT instead of using
           separate static gradients per stage. */}
 
-      {/* ── FallopianTubeGroup — drawn first so uterus + ovary paint on top ── */}
-      <g id="FallopianTubeGroup">
-        {/* PNG illustration — white background removed.
-            Scale 0.65× (998×666) keeps the native 1536×1024 ratio.
-            x=420 positions fimbriae (left edge at 58.5 % of width) flush with
-            the ovary right edge (SVG x≈1003).  Arch apex stays at SVG y=133. */}
-        <image
-          href="/tube.png"
-          x={420} y={62}
-          width={998} height={666}
-          style={{ cursor: 'pointer' }}
-          onClick={() => onStructureClick('fallopian-tube')}
-        />
-        {/* Invisible thick-stroke click target along the original centreline */}
-        <path
-          d={TUBE_PATH}
-          fill="none"
-          stroke="transparent"
-          strokeWidth="80"
-          strokeLinecap="round"
-          style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
-          onClick={() => onStructureClick('fallopian-tube')}
-        />
-        {/* Label — sits in the upper section of the tube arc */}
-        <text
-          x="1020" y="128"
-          textAnchor="middle"
-          fontSize="17"
-          fill="#f5cdd4"
-          fontFamily="sans-serif"
-          transform="rotate(-5,1020,128)"
-          opacity={0.80}
-          style={{ pointerEvents: 'none', userSelect: 'none' }}
-        >
-          Fallopian tube
-        </text>
-      </g>
+      {/* Shifts the ovary, all follicles, the dominant structure, corpus
+          luteum, FSH glow, LH ring, and granulosa cells together so the
+          ovary's upper-right edge tucks under the fimbriae opening. The egg
+          (EggGroup, below) lives outside this wrapper — its start point is
+          adjusted separately in eggPosition(). */}
+      <g transform={`translate(${OVARY_DX}, ${OVARY_DY})`}>
 
-      {/* ── OvaryGroup — rendered before UterusGroup so the uterus paints ──
-           over the ovary stem, hiding it behind the uterus wall.          */}
+      {/* ── OvaryGroup — rendered BEFORE UterusTubeGroup so the uterus body ──
+           tucks the ovary's stalk behind it.                               */}
       <g id="OvaryGroup">
         <image
           href="/ovary.png"
@@ -517,70 +498,6 @@ export default function AnatomyLayer({
           style={{ cursor: 'pointer', pointerEvents: 'fill' }}
           onClick={() => onStructureClick('ovary')}
         />
-      </g>
-
-      {/* ── UterusGroup ───────────────────────────────────────────────────── */}
-      <g id="UterusGroup">
-        {/* Myometrium outer wall */}
-        <path
-          d={UTERUS_OUTER}
-          fill="#7a3040"
-          style={{ cursor: 'pointer' }}
-          onClick={() => onStructureClick('uterus')}
-        />
-        {/*
-          Endometrium — rendered as a rim that lines the uterine cavity wall.
-
-          Three layers, back to front:
-          1. Endometrium fill: UTERUS_CAVITY at full size, in endometrium colour.
-             This is the "wall lining" layer.
-          2. Secretory-phase overlay: same shape, slightly darker, opacity driven
-             by progesterone level — simulates glandular engorgement.
-          3. Inner cavity mask: UTERUS_CAVITY scaled down, in cavity colour.
-             Covers the central space, leaving only the rim visible as endometrium.
-             A smaller scale = thicker visible rim = thicker endometrium.
-        */}
-
-        {/* Layer 1 — endometrium fill (full cavity area, endometrium colour) */}
-        <path
-          d={UTERUS_CAVITY}
-          fill="#d85070"
-          style={{ cursor: 'pointer' }}
-          onClick={() => onStructureClick('endometrium')}
-        />
-
-        {/* Layer 2 — secretory-phase darkening driven by progesterone */}
-        <motion.path
-          d={UTERUS_CAVITY}
-          fill="#a03050"
-          style={{ pointerEvents: 'none' }}
-          initial={{ opacity: 0 }}
-          animate={{
-            opacity: Math.min(0.48, Math.max(0, (progesteroneLevel - 0.15) / 0.65)),
-          }}
-          transition={{ duration: 0.6 }}
-        />
-
-        {/* Layer 3 — inner cavity mask (shrinks as endometrium thickens) */}
-        <motion.path
-          d={UTERUS_CAVITY}
-          fill="#f5cdd4"
-          style={{ transformOrigin: ENDO_ORIGIN, pointerEvents: 'none' }}
-          animate={{ scale: innerCavityScale }}
-          transition={{ duration: 0.5 }}
-        />
-        {/* Label in the fundus (top wall) area */}
-        <text
-          x="155" y="195"
-          textAnchor="middle"
-          fontSize="19"
-          fill="#f5cdd4"
-          fontFamily="sans-serif"
-          opacity={0.70}
-          style={{ pointerEvents: 'none', userSelect: 'none' }}
-        >
-          Uterus
-        </text>
       </g>
 
       {/*
@@ -1015,6 +932,85 @@ export default function AnatomyLayer({
             })}
           </>
         )}
+      </g>
+
+      </g>
+      {/* ── end ovary-group wrapper (translate OVARY_DX, OVARY_DY) ── */}
+
+      {/* ── UterusTubeGroup — connected uterus+tube PNG, drawn AFTER the ──
+           ovary group so the uterus body hides the ovary's stalk behind it. */}
+      <g id="UterusTubeGroup">
+        {/* Connected illustration — white background removed. Native 1491×1055,
+            placed via the shared UTERUS_ART_* box (see top of file). */}
+        <image
+          href="/uterofallop.png"
+          x={UTERUS_ART_X} y={UTERUS_ART_Y}
+          width={UTERUS_ART_W} height={UTERUS_ART_H}
+          style={{ pointerEvents: 'none' }}
+        />
+
+        {/* Invisible click target — uterus body */}
+        <path
+          d={UTERUS_HIT}
+          fill="transparent"
+          style={{ cursor: 'pointer', pointerEvents: 'fill' }}
+          onClick={() => onStructureClick('uterus')}
+        />
+
+        {/* Endometrium — morphs continuously between thin/mid/thick artwork
+            (see src/data/endometrium.ts) as endometriumThickness changes.
+            Path data shares the uterus PNG's native 1491×1055 coordinate space,
+            so it's placed with the EXACT SAME box (translate + the scale that
+            box implies) — no independent offset or separate scaleX/scaleY. */}
+        <g
+          transform={
+            `translate(${UTERUS_ART_X}, ${UTERUS_ART_Y}) ` +
+            `scale(${UTERUS_ART_W / UTERUS_ART_NATIVE_W}, ${UTERUS_ART_H / UTERUS_ART_NATIVE_H})`
+          }
+          style={{ cursor: 'pointer' }}
+          onClick={() => onStructureClick('endometrium')}
+        >
+          {endo.paths.map((d, i) => (
+            <path key={i} d={d} fill={endo.color} stroke={endo.color} strokeWidth={1} />
+          ))}
+        </g>
+
+        {/* Invisible thick-stroke click target along the tube centreline */}
+        <path
+          d={TUBE_PATH}
+          fill="none"
+          stroke="transparent"
+          strokeWidth="70"
+          strokeLinecap="round"
+          style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
+          onClick={() => onStructureClick('fallopian-tube')}
+        />
+
+        {/* Label — fundus (top wall) of the uterus */}
+        <text
+          x="300" y="140"
+          textAnchor="middle"
+          fontSize="19"
+          fill="#f5cdd4"
+          fontFamily="sans-serif"
+          opacity={0.70}
+          style={{ pointerEvents: 'none', userSelect: 'none' }}
+        >
+          Uterus
+        </text>
+
+        {/* Label — sits in the upper section of the tube arc */}
+        <text
+          x="950" y="95"
+          textAnchor="middle"
+          fontSize="17"
+          fill="#f5cdd4"
+          fontFamily="sans-serif"
+          opacity={0.80}
+          style={{ pointerEvents: 'none', userSelect: 'none' }}
+        >
+          Fallopian tube
+        </text>
       </g>
 
       {/* ── EggGroup ──────────────────────────────────────────────────────── */}
