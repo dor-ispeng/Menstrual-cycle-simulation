@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, animate } from 'framer-motion'
 import CorpusLuteumRosette from './CorpusLuteumRosette'
 import { endometriumMorph } from '@/data/endometrium'
+import { useImageAlpha, svgLocalPointFromEvent } from '@/utils/imageAlpha'
 
 // ── Shared uterus-artwork placement box ──────────────────────────────────────
 // The uterus+tube PNG (public/uterofallop.png) and the endometrium SVG data
@@ -19,6 +20,17 @@ const UTERUS_ART_X = -213
 const UTERUS_ART_Y = -88
 const UTERUS_ART_W = 1548
 const UTERUS_ART_H = 1096
+
+// ── Shared ovary-artwork placement box ───────────────────────────────────────
+// Same idea as above, for public/ovary.png — single source of truth for the
+// <image> placement and for converting a click's local coordinate into that
+// PNG's native pixel space (used by the alpha-gated click handler).
+const OVARY_ART_NATIVE_W = 1402
+const OVARY_ART_NATIVE_H = 1122
+const OVARY_ART_X = 504
+const OVARY_ART_Y = 395
+const OVARY_ART_W = 588
+const OVARY_ART_H = 471
 
 // ── Canvas: 1400 × 900 ──────────────────────────────────────────────────────
 // Composition (left→right):
@@ -48,13 +60,17 @@ const UTERUS_HIT =
 
 // ── Fallopian tube ────────────────────────────────────────────────────────────
 
-// Four-segment cubic bezier tracing the NEW uterofallop.png tube centerline:
-// exits uterus upper-right (uterine junction), arcs across the top, curves
-// down-right through the hook, then curls back left into the fimbriae
-// opening. Control points tuned against the rendered PNG in-browser.
-const TUBE_PATH =
-  'M 514,390 ' +
-  'C 580,320 650,230 722,188 ' +
+// Four-segment cubic bezier tracing the uterofallop.png tube centerline:
+// exits uterus upper-right (uterine junction, 514,390), arcs across the top,
+// curves down-right through the hook, then curls back left into the
+// fimbriae opening. Control points tuned against the rendered PNG in-browser.
+//
+// The click target below starts at (722,188), past the first segment —
+// the wide funnel where the tube flares out to meet the uterus wall — so
+// clicking that funnel/junction area is attributed to the uterus, not
+// the tube.
+const TUBE_HIT_PATH =
+  'M 722,188 ' +
   'C 820,150 950,110 1044,114 ' +
   'C 1120,118 1170,140 1160,280 ' +
   'C 1150,380 1120,460 1089,498'
@@ -342,6 +358,44 @@ export default function AnatomyLayer({
   }, [endometriumThickness])
   const endo = endometriumMorph(shownThickness)
 
+  // ── Pixel-precise click gating ───────────────────────────────────────────
+  // The uterus/tube/ovary click targets below (UTERUS_HIT, TUBE_PATH,
+  // OVARY_PATH) are hand-drawn approximations of each PNG's silhouette, not
+  // exact traces — so their rough regions can extend past the artwork into
+  // the PNG's transparent padding. Each handler below converts the click to
+  // that image's native pixel space and only fires if the pixel there is
+  // actually opaque, so clicking blank canvas never opens a popup.
+  const isOpaqueUterusArt = useImageAlpha('/uterofallop.png')
+  const isOpaqueOvaryArt = useImageAlpha('/ovary.png')
+
+  const handleUterusClick = useCallback((e: React.MouseEvent<SVGPathElement>) => {
+    const pt = svgLocalPointFromEvent(e)
+    if (!pt) { onStructureClick('uterus'); return }
+    const nx = (pt.x - UTERUS_ART_X) / (UTERUS_ART_W / UTERUS_ART_NATIVE_W)
+    const ny = (pt.y - UTERUS_ART_Y) / (UTERUS_ART_H / UTERUS_ART_NATIVE_H)
+    if (isOpaqueUterusArt(nx, ny, 3)) onStructureClick('uterus')
+  }, [isOpaqueUterusArt, onStructureClick])
+
+  const handleTubeClick = useCallback((e: React.MouseEvent<SVGPathElement>) => {
+    const pt = svgLocalPointFromEvent(e)
+    if (!pt) { onStructureClick('fallopian-tube'); return }
+    const nx = (pt.x - UTERUS_ART_X) / (UTERUS_ART_W / UTERUS_ART_NATIVE_W)
+    const ny = (pt.y - UTERUS_ART_Y) / (UTERUS_ART_H / UTERUS_ART_NATIVE_H)
+    // Wider tolerance than the uterus check: the fimbriae fan out into
+    // separate fingers with small gaps of blank canvas between them, and
+    // clicking those gaps should still register as "the tube" (one region),
+    // not fall through as a blank-canvas click.
+    if (isOpaqueUterusArt(nx, ny, 18)) onStructureClick('fallopian-tube')
+  }, [isOpaqueUterusArt, onStructureClick])
+
+  const handleOvaryClick = useCallback((e: React.MouseEvent<SVGPathElement>) => {
+    const pt = svgLocalPointFromEvent(e)
+    if (!pt) { onStructureClick('ovary'); return }
+    const nx = (pt.x - OVARY_ART_X) / (OVARY_ART_W / OVARY_ART_NATIVE_W)
+    const ny = (pt.y - OVARY_ART_Y) / (OVARY_ART_H / OVARY_ART_NATIVE_H)
+    if (isOpaqueOvaryArt(nx, ny, 3)) onStructureClick('ovary')
+  }, [isOpaqueOvaryArt, onStructureClick])
+
   // ── Persistent dominant structure: follicle → ruptured follicle → CL ────
   // One SVG element lives here through the entire lifecycle.
   // Nothing is deleted or created; only r, fill, and stroke morph.
@@ -484,19 +538,23 @@ export default function AnatomyLayer({
       {/* ── OvaryGroup — rendered BEFORE UterusTubeGroup so the uterus body ──
            tucks the ovary's stalk behind it.                               */}
       <g id="OvaryGroup">
+        {/* Not itself clickable — SVG <image> hit-tests its full rectangular
+            bounding box regardless of the raster's transparency, which let
+            clicks on blank canvas register as the ovary. The invisible path
+            below (gated by real pixel alpha) is the only click target. */}
         <image
           href="/ovary.png"
-          x={504} y={395}
-          width={588} height={471}
-          style={{ cursor: 'pointer' }}
-          onClick={() => onStructureClick('ovary')}
+          x={OVARY_ART_X} y={OVARY_ART_Y}
+          width={OVARY_ART_W} height={OVARY_ART_H}
+          style={{ pointerEvents: 'none' }}
         />
-        {/* Invisible boundary path — preserves the precise elliptical click target */}
+        {/* Invisible boundary path — rough candidate region; handleOvaryClick
+            gates the actual popup on real pixel alpha (see above). */}
         <path
           d={OVARY_PATH}
           fill="transparent"
           style={{ cursor: 'pointer', pointerEvents: 'fill' }}
-          onClick={() => onStructureClick('ovary')}
+          onClick={handleOvaryClick}
         />
       </g>
 
@@ -949,12 +1007,13 @@ export default function AnatomyLayer({
           style={{ pointerEvents: 'none' }}
         />
 
-        {/* Invisible click target — uterus body */}
+        {/* Invisible click target — uterus body; rough candidate region,
+            handleUterusClick gates the actual popup on real pixel alpha. */}
         <path
           d={UTERUS_HIT}
           fill="transparent"
           style={{ cursor: 'pointer', pointerEvents: 'fill' }}
-          onClick={() => onStructureClick('uterus')}
+          onClick={handleUterusClick}
         />
 
         {/* Endometrium — morphs continuously between thin/mid/thick artwork
@@ -975,15 +1034,17 @@ export default function AnatomyLayer({
           ))}
         </g>
 
-        {/* Invisible thick-stroke click target along the tube centreline */}
+        {/* Invisible thick-stroke click target along the tube centreline;
+            rough candidate region, handleTubeClick gates the actual popup on
+            real pixel alpha (with a wider tolerance for the fimbriae gaps). */}
         <path
-          d={TUBE_PATH}
+          d={TUBE_HIT_PATH}
           fill="none"
           stroke="transparent"
           strokeWidth="70"
           strokeLinecap="round"
           style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
-          onClick={() => onStructureClick('fallopian-tube')}
+          onClick={handleTubeClick}
         />
 
         {/* Label — fundus (top wall) of the uterus */}
