@@ -1,5 +1,7 @@
 'use client'
 
+import Corp1Lobes from './Corp1Lobes'
+import Corp2Lobes from './Corp2Lobes'
 import Corp3Lobes from './Corp3Lobes'
 
 // ── Corpus luteum rosette ────────────────────────────────────────────────────
@@ -9,65 +11,33 @@ import Corp3Lobes from './Corp3Lobes'
 //   → corp2 (forming ring, fully formed at After Release)
 //   → corp3 (mature rosette, fully formed at Preparation)
 //
-// corp2 and corp3's lobed silhouettes are traced directly from the reference
-// vector files (SVG/corp2.svg, SVG/corp3.svg) rather than synthesized from
-// sine waves, so their outline is biologically grounded. corp1 is different:
-// it's an open "C"-shaped crescent (the follicle's rupture point hasn't
-// sealed yet, matching corp1_ref.png) representing collapsed tissue under
-// slight tension, and is built as a continuous low-frequency spline (see
-// buildCollapsedMembraneShape) rather than resampled from traced vertices —
-// densely resampling the hand-drawn polygon baked in every small notch of
-// the source art and read as faceted/zig-zaggy. All three shapes share the
-// same angular resolution (SAMPLES) so `stageT` performs a genuine
-// point-by-point interpolation of one silhouette into the next — the tissue
-// reads as forming/twisting/thickening inward, not as images crossfading.
-// corp1's real opening tapers smoothly to zero width at each tip (no
+// All three shapes' silhouettes (CORP1_SHAPE/CORP2_SHAPE/CORP3_NEW_SHAPE, see
+// "derived morph profiles" below) are 96-sample polar profiles derived
+// directly from each stage's CURRENT approved artwork by an offline script
+// (derive_morph_shapes.py) — corp1/corp2 by re-running their bead-generator
+// math, corp3 by parsing SVG/corp3.svg directly — sharing the same 15-lobe
+// angular skeleton and the same SAMPLES resolution, so `stageT` performs a
+// genuine point-by-point interpolation of one CURRENT silhouette into the
+// next — the tissue reads as forming/twisting/thickening inward, not as
+// images crossfading. corp1's real opening (where its two frayed knob
+// clusters leave a gap) tapers smoothly to zero width at each tip (no
 // polygonal pinch); that taper is what visibly "closes" into corp2's full
 // ring as the corp1→corp2 morph proceeds. Colour, cavity fill, fold texture
-// and highlight placement are all driven by the same stage parameter and
-// tuned against corp1_ref.png / corp2_ref.png / corp3_ref.png for the
-// painterly shading, softness and gradients.
+// and highlight placement are all driven by the same stage parameter.
+//
+// corp1 and corp2 each also have a redesigned, hand-tuned static-markup twin
+// (Corp1Lobes / Corp2Lobes — plump individually-shaded bead rings, generated
+// offline from SVG/corp1.svg / SVG/corp2.svg exactly like Corp3Lobes was),
+// which takes over from the legacy rendering above only right at that
+// shape's own resting stage — corp1Weight / corp2LobesWeight below, the same
+// crossfade technique corp3Weight already uses for corp3. The legacy
+// point-morph keeps driving every transitional (in-between) frame, so the
+// continuous forming/twisting/thickening animation is untouched; the redesigned
+// art only ever appears once a stage has (nearly) fully arrived.
 
 type Pt = [number, number]
 
 // ── geometry helpers ─────────────────────────────────────────────────────
-
-function centroidOf(pts: Pt[]): Pt {
-  let sx = 0, sy = 0
-  for (const [x, y] of pts) { sx += x; sy += y }
-  return [sx / pts.length, sy / pts.length]
-}
-
-function meanRadius(pts: Pt[], center: Pt): number {
-  let s = 0
-  for (const [x, y] of pts) s += Math.hypot(x - center[0], y - center[1])
-  return s / pts.length
-}
-
-// Resample a closed polygon into `samples` points evenly spaced by angle
-// around `center`, returning radius/refR (a size-normalized ratio) per angle.
-function toPolarProfile(pts: Pt[], center: Pt, refR: number, samples: number): number[] {
-  const proj = pts
-    .map(([x, y]): Pt => [
-      Math.atan2(y - center[1], x - center[0]),
-      Math.hypot(x - center[0], y - center[1]) / refR,
-    ])
-    .sort((a, b) => a[0] - b[0])
-  const profile: number[] = []
-  for (let i = 0; i < samples; i++) {
-    const theta = (i / samples) * Math.PI * 2 - Math.PI
-    let hi = proj[0]
-    let lo = proj[proj.length - 1]
-    for (let j = 0; j < proj.length; j++) {
-      if (proj[j][0] >= theta) { hi = proj[j]; lo = proj[(j - 1 + proj.length) % proj.length]; break }
-    }
-    let span = hi[0] - lo[0]
-    if (span <= 0) span += Math.PI * 2
-    const t = span === 0 ? 0 : Math.max(0, Math.min(1, (((theta - lo[0]) + Math.PI * 2) % (Math.PI * 2)) / span))
-    profile.push(lo[1] + (hi[1] - lo[1]) * t)
-  }
-  return profile
-}
 
 function catmullRomClosed(pts: Pt[]): string {
   const n = pts.length
@@ -119,22 +89,6 @@ interface ShapeData {
   gapRange?: [number, number]
 }
 
-function highlightsFromGroups(groups: Pt[][], center: Pt, refR: number) {
-  return groups.map((pts) => {
-    const c = centroidOf(pts)
-    const dx = c[0] - center[0], dy = c[1] - center[1]
-    return { angle: Math.atan2(dy, dx), rFrac: Math.hypot(dx, dy) / refR }
-  })
-}
-
-function buildShape(outerPts: Pt[], innerPts: Pt[], highlightGroups: Pt[][]): ShapeData {
-  const center = centroidOf(outerPts)
-  const refR = meanRadius(outerPts, center)
-  const outerProfile = toPolarProfile(outerPts, center, refR, SAMPLES)
-  const innerProfile = toPolarProfile(innerPts, center, refR, SAMPLES)
-  return { outerProfile, innerProfile, highlights: highlightsFromGroups(highlightGroups, center, refR) }
-}
-
 // Circular 1-2-1 moving-average — softens the sharp local corners that
 // nearest-angle resampling of a hand-traced polygon introduces (each vertex
 // becomes a hard V in the profile) into rounded bumps, without discarding
@@ -152,12 +106,6 @@ function smoothProfileCircular(profile: number[], passes: number): number[] {
   return p
 }
 
-function angularDistance(a: number, b: number): number {
-  let d = Math.abs(a - b) % (Math.PI * 2)
-  if (d > Math.PI) d = Math.PI * 2 - d
-  return d
-}
-
 // Cubic ease, zero slope at both ends — used everywhere a value needs to
 // ease smoothly between two states with no corner (C1-continuous), instead
 // of a linear ramp or a hard cutoff.
@@ -166,228 +114,174 @@ function smoothstep(t: number): number {
   return c * c * (3 - 2 * c)
 }
 
-// A single smooth, compact-support bump — zero and zero-slope at
-// ±halfWidth, peaking at `amplitude` at the centre (a raised cosine). This
-// is the building block for both the centerline's folds and the tip
-// closure: everything is C¹-continuous, so nothing ever meets at a corner.
-function raisedCosineBump(d: number, halfWidth: number): number {
-  if (d >= halfWidth) return 0
-  return 0.5 * (1 + Math.cos((Math.PI * d) / halfWidth))
+// ── derived morph profiles (SVG/corp1.svg, SVG/corp2.svg, SVG/corp3.svg) ──
+// 96-sample polar radius/refR profiles, generated offline (derive_morph_shapes.py)
+// directly from each stage's CURRENT approved artwork -- corp1/corp2 by
+// re-running the same bead-generator math the SVGs themselves come from,
+// corp3 by parsing SVG/corp3.svg's 15 lobeClip paths + cavityClip path --
+// then envelope-sampling (max/min radius per angular bin) around the shared
+// (477,428) centre. All three sit on the SAME 15-lobe angular skeleton, so
+// sample i means the same angle in every shape and the point-morph below is
+// a genuine point-by-point deform between the CURRENT designs, not stale
+// placeholder silhouettes. corp1's real opening (where the frayed knob
+// clusters leave a gap) is preserved as CORP1_GAP_RANGE, tapering to a true
+// zero-width pinch there exactly like the crescent this replaces did.
+
+const CORP1_OUTER_PROFILE: number[] = [
+  1.06405, 1.06066, 1.04451, 1.04929, 1.05791, 1.05702, 1.01957, 0.97384,
+  0.98864, 1.01635, 1.01850, 1.01112, 0.98574, 0.94113, 0.93134, 0.96527,
+  0.98740, 0.98773, 0.97321, 0.94481, 0.91243, 0.86297, 0.91057, 0.95656,
+  0.96736, 0.97096, 0.97663, 0.98365, 0.98400, 0.97259, 0.91950, 0.95390,
+  0.98415, 0.99719, 1.00404, 1.00635, 1.00573, 0.98315, 1.01814, 1.03240,
+  1.04345, 1.03938, 1.02607, 0.98410, 0.93697, 0.81565, 0.79067, 0.78484,
+  0.78232, 0.78202, 0.81593, 0.91175, 0.97449, 1.01462, 1.04147, 1.04848,
+  1.03484, 1.03464, 0.99751, 0.98119, 1.00428, 1.00921, 1.00925, 1.00689,
+  0.99716, 0.96382, 0.94393, 0.96247, 0.97033, 0.96978, 0.95146, 0.92036,
+  0.88859, 0.84328, 0.90995, 0.95016, 0.96839, 0.97574, 0.97578, 0.96586,
+  0.94384, 0.91435, 0.93321, 0.96071, 1.01397, 1.04416, 1.04428, 1.03210,
+  1.00672, 1.03209, 1.04049, 1.04072, 1.03144, 1.00380, 1.03004, 1.05861,
+]
+const CORP1_INNER_PROFILE: number[] = [
+  0.58525, 0.58975, 0.57005, 0.55753, 0.55440, 0.55680, 0.57842, 0.57058,
+  0.55643, 0.55165, 0.55183, 0.55859, 0.57092, 0.58617, 0.57121, 0.56344,
+  0.56040, 0.55920, 0.55957, 0.56437, 0.57917, 0.55761, 0.54203, 0.53632,
+  0.53544, 0.53593, 0.53829, 0.54152, 0.54707, 0.55863, 0.58102, 0.58247,
+  0.54301, 0.52093, 0.51271, 0.51311, 0.52531, 0.55505, 0.60012, 0.61126,
+  0.64181, 0.68639, 0.73785, 0.78264, 0.82024, 0.78072, 0.78405, 0.78484,
+  0.78232, 0.77757, 0.78266, 0.80751, 0.77606, 0.71672, 0.65540, 0.60620,
+  0.57237, 0.55830, 0.56456, 0.57867, 0.56704, 0.56248, 0.56147, 0.56212,
+  0.56749, 0.56177, 0.54202, 0.52885, 0.52312, 0.52158, 0.52175, 0.52564,
+  0.53512, 0.55031, 0.55055, 0.52441, 0.50905, 0.50253, 0.50248, 0.51204,
+  0.53570, 0.57288, 0.59154, 0.56650, 0.55247, 0.54733, 0.54705, 0.55072,
+  0.56059, 0.57984, 0.57690, 0.57342, 0.57351, 0.57698, 0.58651, 0.58495,
+]
+const CORP1_GAP_RANGE: [number, number] = [47, 48]
+const CORP1_GLINTS: { angle: number; rFrac: number }[] = [
+  { angle: -3.11192, rFrac: 0.74635 },
+  { angle: -2.79078, rFrac: 0.74635 },
+  { angle: -2.43822, rFrac: 0.74635 },
+  { angle: -2.00015, rFrac: 0.74635 },
+  { angle: -1.43990, rFrac: 0.74635 },
+  { angle: -0.92328, rFrac: 0.74635 },
+  { angle: -0.49393, rFrac: 0.74635 },
+  { angle: 0.54105, rFrac: 0.74635 },
+  { angle: 0.97738, rFrac: 0.74635 },
+  { angle: 1.39626, rFrac: 0.74635 },
+  { angle: 1.93732, rFrac: 0.74635 },
+  { angle: 2.43648, rFrac: 0.74635 },
+  { angle: 2.81696, rFrac: 0.74635 },
+]
+const CORP2_OUTER_PROFILE: number[] = [
+  1.02916, 1.02681, 1.01295, 1.01492, 1.02953, 1.03020, 1.01686, 0.98525,
+  0.97682, 1.00614, 1.01819, 1.01786, 1.00592, 0.97979, 0.95138, 0.98590,
+  1.01145, 1.01709, 1.01305, 0.99172, 0.96180, 0.91816, 0.94333, 0.99244,
+  1.00870, 1.01349, 1.01525, 1.01519, 1.00626, 0.96545, 0.95278, 0.99186,
+  1.00994, 1.01662, 1.01701, 1.01501, 1.00179, 0.97122, 0.99534, 1.00875,
+  1.01054, 1.00736, 0.99202, 1.00994, 1.02889, 1.03250, 1.03097, 1.01692,
+  1.00293, 1.01488, 1.01878, 1.01891, 1.01648, 1.00073, 0.99112, 1.00232,
+  1.00371, 1.00294, 0.99601, 0.96740, 1.00468, 1.01995, 1.02448, 1.02445,
+  1.01940, 1.00069, 0.96535, 0.99528, 1.01057, 1.01150, 1.00322, 0.97493,
+  0.93529, 0.90627, 0.96730, 0.99525, 1.00820, 1.01031, 1.00710, 0.99096,
+  0.96069, 0.93635, 0.96279, 1.00025, 1.03137, 1.03501, 1.03044, 1.00954,
+  0.99457, 1.01372, 1.01819, 1.01780, 1.00442, 0.97464, 1.00349, 1.02489,
+]
+const CORP2_INNER_PROFILE: number[] = [
+  0.53782, 0.54035, 0.54600, 0.52813, 0.52218, 0.52210, 0.52804, 0.54752,
+  0.54702, 0.53731, 0.53428, 0.53506, 0.54187, 0.55831, 0.58014, 0.56632,
+  0.56088, 0.56004, 0.56064, 0.56576, 0.57718, 0.60187, 0.57172, 0.55896,
+  0.55342, 0.55278, 0.55312, 0.55661, 0.56728, 0.58321, 0.58100, 0.54796,
+  0.52708, 0.51845, 0.51852, 0.52736, 0.54780, 0.58014, 0.56879, 0.56214,
+  0.56115, 0.56213, 0.56880, 0.54475, 0.52936, 0.52620, 0.52688, 0.53449,
+  0.55314, 0.55974, 0.55864, 0.55832, 0.55884, 0.55396, 0.53400, 0.52486,
+  0.52339, 0.52483, 0.53337, 0.54884, 0.56617, 0.55702, 0.55412, 0.55420,
+  0.55793, 0.56806, 0.56437, 0.55010, 0.54295, 0.54205, 0.54275, 0.54952,
+  0.56389, 0.58965, 0.56012, 0.53789, 0.52697, 0.52464, 0.52713, 0.53873,
+  0.56650, 0.57889, 0.55553, 0.53911, 0.53214, 0.53115, 0.53348, 0.54218,
+  0.55681, 0.54110, 0.53495, 0.53412, 0.53601, 0.54357, 0.54156, 0.53790,
+]
+const CORP2_GLINTS: { angle: number; rFrac: number }[] = [
+  { angle: -3.11192, rFrac: 0.77842 },
+  { angle: -2.79078, rFrac: 0.77842 },
+  { angle: -2.43822, rFrac: 0.77842 },
+  { angle: -2.00015, rFrac: 0.77842 },
+  { angle: -1.43990, rFrac: 0.77842 },
+  { angle: -0.92328, rFrac: 0.77842 },
+  { angle: -0.49393, rFrac: 0.77842 },
+  { angle: -0.16406, rFrac: 0.77842 },
+  { angle: 0.16581, rFrac: 0.77842 },
+  { angle: 0.54105, rFrac: 0.77842 },
+  { angle: 0.97738, rFrac: 0.77842 },
+  { angle: 1.39626, rFrac: 0.77842 },
+  { angle: 1.93732, rFrac: 0.77842 },
+  { angle: 2.43648, rFrac: 0.77842 },
+  { angle: 2.81696, rFrac: 0.77842 },
+]
+const CORP3_OUTER_PROFILE: number[] = [
+  1.15876, 1.16066, 1.14788, 1.11442, 1.04996, 1.05033, 1.04250, 1.02415,
+  1.00744, 1.00262, 1.01448, 1.01513, 0.99329, 0.98542, 0.95459, 0.92442,
+  0.92652, 0.93400, 0.94265, 0.93803, 0.89226, 0.95061, 0.98390, 0.98751,
+  0.98635, 0.99893, 0.99837, 0.98275, 0.98172, 0.96541, 0.96585, 1.01109,
+  1.01551, 1.00551, 1.01644, 1.00772, 0.98043, 0.99680, 1.01246, 1.03565,
+  1.04019, 1.03690, 0.99704, 1.03618, 1.05603, 1.05769, 1.05222, 1.04132,
+  1.10308, 1.11127, 1.10514, 1.09645, 1.09160, 1.05413, 1.00728, 0.97708,
+  0.97099, 0.97040, 0.95901, 0.90580, 0.90932, 0.93305, 0.93707, 0.93316,
+  0.92493, 0.91497, 0.91297, 0.92301, 0.93861, 0.94595, 0.94483, 0.93448,
+  0.91538, 0.88913, 0.92100, 0.92106, 0.93362, 0.94969, 0.95152, 0.94465,
+  0.91859, 0.92038, 0.95674, 0.98840, 1.00593, 1.00604, 0.99996, 1.00632,
+  1.07483, 1.08996, 1.08981, 1.08186, 1.07527, 1.10826, 1.12363, 1.14334,
+]
+const CORP3_INNER_PROFILE: number[] = [
+  0.55550, 0.55539, 0.55391, 0.55100, 0.54706, 0.54247, 0.53724, 0.53254,
+  0.52615, 0.52073, 0.51366, 0.50803, 0.50318, 0.49997, 0.49603, 0.49219,
+  0.48917, 0.48589, 0.48245, 0.47943, 0.47722, 0.47605, 0.47619, 0.47738,
+  0.47914, 0.48038, 0.48202, 0.48357, 0.48528, 0.48737, 0.48995, 0.49307,
+  0.49668, 0.50205, 0.50608, 0.51109, 0.51480, 0.51990, 0.52390, 0.52943,
+  0.53639, 0.54134, 0.54638, 0.55011, 0.55263, 0.55416, 0.55472, 0.55472,
+  0.55415, 0.55298, 0.55046, 0.54661, 0.54285, 0.53868, 0.53419, 0.52810,
+  0.52275, 0.51660, 0.51170, 0.50535, 0.50098, 0.49591, 0.49265, 0.48887,
+  0.48573, 0.48278, 0.47970, 0.47721, 0.47371, 0.47026, 0.46799, 0.46650,
+  0.46615, 0.46720, 0.46928, 0.47208, 0.47519, 0.47805, 0.48067, 0.48342,
+  0.48654, 0.49017, 0.49437, 0.49909, 0.50595, 0.51112, 0.51767, 0.52381,
+  0.52949, 0.53589, 0.54045, 0.54528, 0.54834, 0.55090, 0.55345, 0.55488,
+]
+
+const CORP1_SHAPE: ShapeData = {
+  outerProfile: CORP1_OUTER_PROFILE,
+  innerProfile: CORP1_INNER_PROFILE,
+  highlights: CORP1_GLINTS,
+  gapRange: CORP1_GAP_RANGE,
 }
-
-// A small number of broad folds, each with its own hand-set amplitude and
-// angular width — deliberately irregular (not evenly spaced, not a shared
-// frequency) so the silhouette reads as organically folded tissue rather
-// than a mathematically regular ripple. Angles are degrees for readability
-// (converted below); 0° points screen-right, matching corp1_ref.png's
-// opening direction.
-const CORP1_FOLDS: { angle: number; amplitude: number; halfWidth: number }[] = [
-  { angle: 172, amplitude: 0.20, halfWidth: 48 },  // the big rounded lobe opposite the opening
-  { angle: 96, amplitude: 0.11, halfWidth: 34 },
-  { angle: 246, amplitude: 0.14, halfWidth: 38 },
-  { angle: 46, amplitude: 0.07, halfWidth: 26 },
-  { angle: 298, amplitude: 0.08, halfWidth: 24 },
-]
-
-// corp1 is collapsed follicular tissue under slight tension, not a faceted
-// ring. It's built the way a folded ribbon actually is: a smooth centerline
-// spline (its radius is a base value plus a handful of broad, irregular
-// fold bumps — CORP1_FOLDS) with the outer/inner boundaries offset from
-// that centerline by a slowly-varying half-width. The folds live in the
-// centerline itself, so both boundaries bow together where the tissue
-// folds — not two independently-wobbling curves. Near the opening the
-// half-width eases to zero via smoothstep (C¹-continuous, no corner), so
-// both boundaries curve into a shared, rounded point at each tip — an
-// organic taper, not a pinch. Silhouette proportions (opening direction and
-// width, the big lobe opposite it, overall size) are tuned to match
-// corp1_ref.png / SVG/corp1.svg's shape language; nothing here is resampled
-// from that file's traced vertices.
-function buildCollapsedMembraneShape(): ShapeData {
-  const GAP_CENTER = -0.16          // opening faces right, slightly upward on screen
-  const GAP_HALF = 0.22             // half-width of the fully-collapsed (zero-width) span
-  const TAPER_HALF = 0.62           // half-width of the broader easing zone around it
-  const CENTER_BASE = 0.80          // centerline's resting radius
-  const WIDTH_BASE = 0.20           // resting wall half-width (outer/inner offset each side)
-
-  const foldsRad = CORP1_FOLDS.map((f) => ({
-    angle: (f.angle * Math.PI) / 180,
-    amplitude: f.amplitude,
-    halfWidth: (f.halfWidth * Math.PI) / 180,
-  }))
-
-  const centerlineRadius = (theta: number): number => {
-    let r = CENTER_BASE
-    for (const f of foldsRad) r += f.amplitude * raisedCosineBump(angularDistance(theta, f.angle), f.halfWidth)
-    return r
-  }
-
-  // Wall half-width varies on its own slow, single-harmonic curve —
-  // independent of the centerline's folds, so thickness isn't just a fixed
-  // offset from the silhouette.
-  const wallHalfWidth = (theta: number): number => WIDTH_BASE + 0.03 * Math.cos(2 * theta + 0.8)
-
-  const outerProfile: number[] = []
-  const innerProfile: number[] = []
-  for (let i = 0; i < SAMPLES; i++) {
-    const theta = (i / SAMPLES) * Math.PI * 2 - Math.PI
-    const center = centerlineRadius(theta)
-
-    const d = angularDistance(theta, GAP_CENTER)
-    let closure = 1
-    if (d <= GAP_HALF) {
-      closure = 0
-    } else if (d < TAPER_HALF) {
-      closure = smoothstep((d - GAP_HALF) / (TAPER_HALF - GAP_HALF))
-    }
-
-    const half = wallHalfWidth(theta) * closure
-    outerProfile.push(center + half)
-    innerProfile.push(center - half)
-  }
-
-  // The fully-collapsed span (closure === 0 exactly) is what the stroke
-  // treats as the real opening — see splitAtGap / gapRange usage below.
-  const gapIdx: number[] = []
-  for (let i = 0; i < SAMPLES; i++) {
-    const theta = (i / SAMPLES) * Math.PI * 2 - Math.PI
-    if (angularDistance(theta, GAP_CENTER) <= GAP_HALF) gapIdx.push(i)
-  }
-
-  return {
-    outerProfile,
-    innerProfile,
-    highlights: [],
-    gapRange: [gapIdx[0], gapIdx[gapIdx.length - 1]],
-  }
+const CORP2_SHAPE: ShapeData = {
+  outerProfile: CORP2_OUTER_PROFILE,
+  innerProfile: CORP2_INNER_PROFILE,
+  highlights: CORP2_GLINTS,
 }
-
-// ── traced vertex data (SVG/corp2.svg, SVG/corp3.svg) ────────────────────
-// Coordinates lifted directly from each file's path `d` — outer-body
-// boundary, inner-cavity/hole boundary, and the small sheen-patch groups —
-// so the overall silhouette and lobe placement match the source art. corp1
-// is built procedurally instead (see buildCollapsedMembraneShape above).
-
-// corp2.svg — thin forming ring ("After Release"): outer + inner boundary
-const CORP2_OUTER: Pt[] = [
-  [46, 172], [10, 204], [10, 248], [28, 292], [46, 326], [28, 350], [0, 388], [0, 432], [28, 482], [10, 524], [10, 572],
-  [28, 608], [80, 632], [106, 672], [116, 726], [152, 756], [244, 756], [276, 778], [304, 806], [350, 830], [412, 820],
-  [440, 806], [472, 796], [518, 806], [556, 796], [584, 756], [596, 746], [670, 726], [684, 706], [696, 672], [706, 632],
-  [742, 632], [760, 608], [760, 496], [794, 482], [804, 446], [804, 418], [794, 388], [766, 342], [778, 306], [778, 276],
-  [766, 228], [742, 204], [724, 184], [684, 184], [650, 172], [638, 126], [638, 82], [612, 58], [556, 46], [518, 28],
-  [492, 10], [456, 0], [428, 10], [392, 28], [350, 10], [326, 10], [276, 28], [258, 46], [224, 46], [190, 52], [152, 68],
-  [132, 82], [116, 112], [106, 142], [80, 160],
-]
-const CORP2_INNER: Pt[] = [
-  [238, 186], [252, 152], [316, 152], [328, 142], [346, 108], [412, 108], [446, 128], [482, 152], [530, 152], [530, 186],
-  [550, 222], [550, 258], [568, 270], [612, 288], [638, 304], [654, 330], [654, 428], [664, 460], [664, 488], [638, 508],
-  [612, 526], [578, 556], [578, 632], [568, 644], [530, 660], [506, 660], [494, 692], [482, 704], [464, 714], [434, 704],
-  [388, 704], [362, 692], [346, 660], [328, 632], [298, 622], [264, 622], [238, 600], [208, 556], [218, 526], [218, 488],
-  [190, 460], [164, 446], [138, 428], [138, 406], [164, 384], [176, 362], [176, 330], [164, 304], [164, 270], [190, 246],
-  [218, 246], [238, 222],
-]
-const CORP2_HIGHLIGHTS: Pt[][] = [
-  [[103, 479], [121, 470], [162, 470], [178, 489], [169, 524], [148, 536], [108, 524]],
-  [[3, 385], [35, 366], [61, 375], [51, 416], [35, 429], [3, 416]],
-  [[61, 311], [78, 290], [103, 290], [121, 302], [121, 336], [94, 341]],
-  [[20, 204], [51, 188], [83, 188], [94, 197], [88, 209], [78, 238], [51, 254], [27, 238]],
-  [[148, 99], [162, 85], [205, 71], [205, 104], [162, 123]],
-  [[291, 33], [325, 17], [338, 17], [359, 41], [359, 53], [331, 53], [299, 66], [253, 85], [263, 66]],
-  [[524, 76], [560, 71], [600, 76], [607, 116], [585, 133], [536, 104]],
-  [[415, 33], [459, 41], [466, 59], [474, 76], [498, 76], [505, 47], [487, 22], [459, 17], [428, 22]],
-  [[566, 227], [577, 197], [618, 197], [648, 227], [635, 262], [600, 271]],
-  [[679, 238], [698, 215], [762, 271], [743, 331], [712, 336], [688, 311]],
-  [[683, 413], [715, 379], [743, 385], [769, 406], [755, 453], [712, 463]],
-  [[623, 585], [648, 552], [659, 531], [688, 500], [707, 500], [712, 544], [669, 562], [669, 603], [648, 603]],
-  [[600, 658], [618, 626], [679, 638], [659, 686]],
-  [[326, 747], [359, 741], [408, 755], [430, 770], [408, 790], [350, 801], [316, 781]],
-  [[131, 705], [139, 648], [139, 633], [169, 638], [216, 658], [236, 648], [295, 648], [312, 689], [286, 705], [236, 700], [189, 729]],
-]
-
-// corp3 (redesigned) — Corp3Lobes.tsx's ring of overlapping radial-finger
-// lobes around a recessed cavity: outer boundary points lifted from every
-// lobe's own traced blob path, inner boundary from the cavity fill path —
-// so the corp2→corp3 morph still deforms point-by-point into a silhouette
-// that matches what Corp3Lobes actually renders (see CORP3_NEW_SHAPE and
-// corp3Weight below), instead of morphing into an unrelated placeholder.
-const CORP3_LOBES_OUTER: Pt[] = [
-  [-50,412],[-51,374],[-30,341],[-8,311],[34,308],[65,301],[97,322],[119,326],[139,331],[167,321],
-  [197,323],[229,333],[250,359],[264,389],[261,423],[262,457],[245,486],[217,504],[192,521],[158,514],
-  [133,508],[112,506],[89,516],[61,522],[20,530],[-16,515],[-30,482],[-40,448],[-50,412],[30,254],
-  [51,229],[70,204],[97,189],[131,197],[158,209],[179,223],[193,241],[209,249],[234,252],[257,264],
-  [278,283],[285,310],[281,338],[276,366],[263,391],[240,408],[212,414],[186,413],[162,404],[144,395],
-  [127,386],[106,384],[77,382],[56,366],[28,346],[22,316],[20,284],[30,254],[134,115],[168,101],
-  [196,78],[234,91],[264,99],[287,125],[298,154],[310,172],[323,187],[342,202],[364,223],[367,250],
-  [371,280],[363,311],[337,329],[318,356],[286,358],[257,363],[230,344],[210,327],[196,307],[185,291],
-  [160,284],[136,268],[109,245],[98,212],[100,177],[115,146],[134,115],[308,36],[336,21],[366,33],
-  [396,35],[417,58],[424,90],[427,114],[427,135],[432,152],[440,170],[448,193],[448,219],[437,242],
-  [422,266],[395,272],[369,279],[343,278],[318,271],[302,248],[293,225],[290,203],[284,188],[274,172],
-  [257,153],[246,126],[240,93],[257,68],[282,52],[308,36],[532,-26],[570,-11],[610,0],[635,33],
-  [651,69],[637,112],[630,142],[613,167],[617,192],[615,220],[606,248],[596,287],[565,302],[532,314],
-  [497,311],[459,314],[433,286],[405,266],[399,229],[399,197],[411,169],[415,146],[401,118],[396,84],
-  [405,49],[415,2],[449,-22],[492,-20],[532,-26],[740,56],[774,70],[790,103],[807,134],[797,170],
-  [781,199],[756,219],[740,235],[729,253],[718,275],[702,300],[677,316],[647,320],[618,315],[584,312],
-  [565,285],[545,262],[539,232],[541,202],[557,177],[570,157],[584,140],[590,118],[595,86],[612,54],
-  [641,29],[676,31],[714,28],[740,56],[889,192],[903,220],[898,252],[897,280],[884,305],[860,321],
-  [830,323],[814,330],[801,342],[786,356],[765,368],[742,370],[716,367],[698,350],[679,333],[666,310],
-  [657,286],[664,260],[681,240],[702,227],[720,219],[732,207],[744,193],[760,176],[783,153],[812,149],
-  [843,151],[865,173],[889,192],[954,343],[954,376],[951,408],[937,438],[910,456],[875,459],[847,454],
-  [825,449],[808,459],[787,463],[762,468],[737,460],[715,446],[695,425],[679,400],[680,370],[686,342],
-  [702,318],[729,306],[755,301],[775,297],[794,297],[812,282],[836,270],[866,262],[894,272],[919,290],
-  [942,313],[954,343],[966,516],[963,552],[939,578],[915,601],[881,608],[847,598],[821,582],[802,568],
-  [783,565],[756,569],[733,557],[708,542],[690,518],[683,488],[682,457],[699,430],[709,400],[742,392],
-  [766,380],[796,388],[818,393],[837,404],[861,396],[892,391],[924,399],[946,422],[976,447],[983,483],
-  [966,516],[847,664],[834,692],[803,699],[776,704],[749,704],[726,685],[711,666],[701,648],[688,637],
-  [672,626],[650,613],[632,592],[632,566],[636,540],[655,521],[668,498],[691,485],[719,488],[742,487],
-  [761,507],[775,521],[787,531],[809,534],[828,545],[860,558],[864,584],[878,614],[869,643],[847,664],
-  [704,788],[674,800],[642,807],[611,796],[589,770],[572,749],[570,719],[565,700],[557,684],[540,666],
-  [532,643],[524,614],[540,593],[554,569],[575,550],[601,540],[629,535],[655,550],[678,561],[691,585],
-  [694,610],[703,625],[721,638],[745,656],[757,683],[759,714],[750,744],[733,772],[704,788],[549,855],
-  [515,856],[482,849],[452,834],[436,802],[432,769],[442,738],[442,717],[438,698],[432,675],[426,646],
-  [433,616],[457,601],[479,581],[508,576],[537,577],[566,580],[592,593],[606,621],[604,652],[605,674],
-  [609,693],[624,713],[632,738],[635,768],[632,803],[608,826],[579,839],[549,855],[332,833],[297,824],
-  [272,800],[256,770],[260,732],[266,703],[282,680],[294,661],[302,644],[309,623],[311,590],[333,574],
-  [357,555],[387,555],[417,556],[442,574],[462,595],[479,618],[481,646],[476,672],[462,693],[459,712],
-  [457,733],[460,764],[448,791],[431,826],[400,842],[366,831],[332,833],[138,738],[116,711],[103,679],
-  [109,644],[113,613],[137,590],[164,576],[181,564],[195,550],[210,532],[229,509],[255,506],[284,503],
-  [313,510],[336,528],[360,548],[369,577],[369,607],[358,634],[342,655],[319,668],[308,684],[298,703],
-  [285,727],[263,750],[234,762],[202,760],[170,752],[138,738],[10,595],[4,563],[-2,531],[11,500],
-  [28,474],[61,463],[91,462],[112,459],[131,456],[150,446],[176,431],[203,434],[236,437],[251,463],
-  [271,486],[271,517],[269,545],[265,573],[245,593],[216,601],[197,611],[179,620],[162,632],[139,654],
-  [108,668],[80,659],[45,652],[20,628],[10,595],
-]
-const CORP3_LOBES_INNER: Pt[] = [
-  [223,421],[244,343],[298,277],[384,227],[506,210],[616,245],[692,313],[727,387],[725,470],[682,550],
-  [603,614],[515,640],[398,632],[300,578],[242,506],[223,421],
-]
-
-const CORP1_SHAPE = buildCollapsedMembraneShape()
-const CORP2_SHAPE = buildShape(CORP2_OUTER, CORP2_INNER, CORP2_HIGHLIGHTS)
-// Same light circular smoothing already used for the old traced corp3 —
-// rounds off the faceting nearest-angle resampling introduces without
-// losing the lobe count/placement. No highlight glints here (empty array):
-// Corp3Lobes carries its own per-lobe streak highlights, which take over
-// via corp3Weight well before this profile shape is the only thing left.
-const CORP3_NEW_SHAPE_TRACED = buildShape(CORP3_LOBES_OUTER, CORP3_LOBES_INNER, [])
+// Light circular smoothing softens residual 96-bin quantization noise from
+// envelope-sampling without losing the lobe count/placement -- same
+// technique the old traced corp3 used.
 const CORP3_NEW_SHAPE: ShapeData = {
-  ...CORP3_NEW_SHAPE_TRACED,
-  outerProfile: smoothProfileCircular(CORP3_NEW_SHAPE_TRACED.outerProfile, 3),
-  innerProfile: smoothProfileCircular(CORP3_NEW_SHAPE_TRACED.innerProfile, 3),
+  outerProfile: smoothProfileCircular(CORP3_OUTER_PROFILE, 2),
+  innerProfile: smoothProfileCircular(CORP3_INNER_PROFILE, 2),
+  highlights: [],
 }
 
 // ── gradient stop palettes (kept consistent with the rest of AnatomyLayer) ─
 
+// Matches Corp1Lobes' cream bead palette (#FFFBEA -> #F8ECC4 -> #EDD89E -> #DEC17C).
 const CORP1_OUTER_STOPS: [number, string][] = [
-  [0, '#FFFCE0'], [25, '#F8F0B4'], [50, '#EEE4A0'], [75, '#E0D488'], [100, '#C8C060'],
+  [0, '#FFFBEA'], [25, '#F8ECC4'], [50, '#EDD89E'], [75, '#E0C48A'], [100, '#DEC17C'],
 ]
 // Radial, inner-edge-out: lightest right where the band starts at the
 // cavity hole, darkening steadily out to the outer rim — gives the ring's
 // tube cross-section a rounded, non-flat read instead of one flat fill.
+// Matches Corp2Lobes' lemon bead palette (#FFF3A0 -> #F9DE5E -> #EFC53E -> #DFA92A).
 const CORP2_OUTER_STOPS: [number, string][] = [
-  [0, '#FFFAE0'], [25, '#FBEA9A'], [50, '#F5DC70'], [75, '#E8C850'], [100, '#D0A838'],
+  [0, '#FFF3A0'], [25, '#F9DE5E'], [50, '#F2D24E'], [75, '#EFC53E'], [100, '#DFA92A'],
 ]
-const CORP2_RIM = '#D0A838'
+const CORP2_RIM = '#DFA92A'
+// Matches Corp3Lobes' lobeBaseShared gradient (#FBE49C -> #F3D073 -> #E8B94E -> #D89F3A).
 const CORP3_OUTER_STOPS: [number, string][] = [
-  [0, '#FFF2C8'], [25, '#F8DC90'], [50, '#EFCA68'], [75, '#E2B040'], [100, '#C89828'],
+  [0, '#FBE49C'], [25, '#F6DA88'], [50, '#F3D073'], [75, '#E8B94E'], [100, '#D89F3A'],
 ]
 
 // ── shape → path ─────────────────────────────────────────────────────────
@@ -551,9 +445,9 @@ export default function CorpusLuteumRosette({
   // corp2's rim matches its own gradient's outer-edge stop (no visible
   // outline at that endpoint), while corp1's and corp3's rim colours are
   // untouched.
-  const rimA = inFirstHalf ? '#D8C860' : CORP2_RIM
+  const rimA = inFirstHalf ? '#DEC17C' : CORP2_RIM
   const rimB = inFirstHalf ? CORP2_RIM : '#B09020'
-  const tintA = inFirstHalf ? '#FFFCE0' : '#FFFFF0'
+  const tintA = inFirstHalf ? '#FFFBEA' : '#FFFFF0'
   const tintB = inFirstHalf ? '#FFFFF0' : '#F9E982'
   const localT = inFirstHalf ? stage : stage - 1
   // corp3 renders 30% smaller than corp1/corp2 — eased in continuously
@@ -617,10 +511,32 @@ export default function CorpusLuteumRosette({
   // below fades out in lockstep so the two crossfade instead of
   // double-exposing.
   const corp3Weight = inFirstHalf ? 0 : smoothstep((localT - 0.8) / 0.2)
+  // The redesigned corp1 (Corp1Lobes — plump cream bead ring, torn open at
+  // the rupture point) takes over from the legacy procedural crescent only
+  // right at its own resting stage: 1 exactly at stage 0 (Ovulation
+  // Decision), easing back to 0 by 20% of the way into the corp1→corp2
+  // morph. Unlike corp3Weight this endpoint has nothing "before" it to stay
+  // continuous with, so a full takeover in that opening window is safe —
+  // mirroring corp3Weight's own one-sided ease, just at the other end of the
+  // timeline. Zero for the entire corp2→corp3 segment.
+  const corp1Weight = inFirstHalf ? smoothstep((0.2 - localT) / 0.2) : 0
+  // The redesigned corp2 (Corp2Lobes — plump lemon-yellow bead ring) takes
+  // over only in a narrow window right at its own resting stage (stage
+  // exactly 1, i.e. After Release): unlike corp1/corp3, which sit at the
+  // very ends of the timeline, corp2 is a mid-point with genuine morphing on
+  // *both* sides (corp1→corp2 and corp2→corp3), so a wide takeover here
+  // would break the continuous-morph illusion on one side or the other. A
+  // narrow ±15%-of-a-stage tent keeps it a brief crossfade exactly at rest,
+  // handing back to the legacy point-morph immediately as either transition
+  // begins.
+  const corp2LobesWeight = smoothstep((0.15 - Math.abs(stage - 1)) / 0.15)
 
   return (
     <>
-    <g opacity={opacity * (1 - corp3Weight)} style={{ pointerEvents: 'none' }}>
+    <g
+      opacity={opacity * (1 - corp3Weight) * (1 - corp1Weight) * (1 - corp2LobesWeight)}
+      style={{ pointerEvents: 'none' }}
+    >
       <defs>
         <radialGradient id={`${id}-outer`} cx={`${outerGradCx}%`} cy={`${outerGradCy}%`} r={`${outerGradR}%`}>
           {stopsA.map(([o, ca], i) => (
@@ -755,6 +671,12 @@ export default function CorpusLuteumRosette({
       <HighlightGlints cx={cx} cy={cy} R={localR} shape={shapeA} opacity={1 - localT} tint={tintA} />
       <HighlightGlints cx={cx} cy={cy} R={localR} shape={shapeB} opacity={localT} tint={tintB} />
     </g>
+    {corp1Weight > 0.001 && (
+      <Corp1Lobes cx={cx} cy={cy} R={localR} opacity={opacity * corp1Weight} id={id} />
+    )}
+    {corp2LobesWeight > 0.001 && (
+      <Corp2Lobes cx={cx} cy={cy} R={localR} opacity={opacity * corp2LobesWeight} id={id} />
+    )}
     {corp3Weight > 0.001 && (
       <Corp3Lobes cx={cx} cy={cy} R={R * 0.7} opacity={opacity * corp3Weight} id={id} />
     )}
