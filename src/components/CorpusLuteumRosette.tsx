@@ -3,6 +3,17 @@
 import Corp1Lobes from './Corp1Lobes'
 import Corp2Lobes from './Corp2Lobes'
 import Corp3Lobes from './Corp3Lobes'
+import CorpusLuteumBeadMorph from './CorpusLuteumBeadMorph'
+
+// EXPERIMENT (Option C prototype): when true, the ENTIRE stageT 0->2 range
+// is rendered by CorpusLuteumBeadMorph -- one live parametric renderer that
+// is the plump 3D tissue at every frame (fingers + a recessed cavity by
+// corp3), with no flatter point-morph fallback and no static-twin crossfade
+// anywhere, including the corp3 rest state itself (no terminal crossfade to
+// Corp3Lobes). Flip to false to instantly revert to the original
+// three-system rendering below, byte-for-byte. Corp1Lobes/Corp2Lobes/
+// Corp3Lobes stay imported for that flag-off path and for A/B comparison.
+const PARAMETRIC_MORPH = true
 
 // ── Corpus luteum rosette ────────────────────────────────────────────────────
 // Reusable, animatable inline-SVG component covering all three post-ovulation
@@ -437,6 +448,15 @@ export default function CorpusLuteumRosette({
   cx, cy, R, stageT, opacity = 1, id = 'cl',
 }: CorpusLuteumRosetteProps) {
   const stage = Math.max(0, Math.min(2, stageT))
+
+  // Option C prototype hand-off: the entire stage range is owned by the
+  // live parametric renderer below (no legacy point-morph, no static
+  // Corp1Lobes/Corp2Lobes/Corp3Lobes twins, no terminal crossfade at corp3).
+  // Flag off falls through to the untouched original rendering unchanged.
+  if (PARAMETRIC_MORPH) {
+    return <CorpusLuteumBeadMorph cx={cx} cy={cy} R={R} stage={stage} opacity={opacity} id={id} />
+  }
+
   const inFirstHalf = stage <= 1
   const shapeA = inFirstHalf ? CORP1_SHAPE : CORP2_SHAPE
   const shapeB = inFirstHalf ? CORP2_SHAPE : CORP3_NEW_SHAPE

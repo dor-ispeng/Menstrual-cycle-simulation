@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { motion, animate } from 'framer-motion'
+import { useCallback } from 'react'
+import { motion } from 'framer-motion'
 import CorpusLuteumRosette from './CorpusLuteumRosette'
 import { endometriumMorph } from '@/data/endometrium'
 import { useImageAlpha, svgLocalPointFromEvent } from '@/utils/imageAlpha'
@@ -346,17 +346,12 @@ export default function AnatomyLayer({
   // endometrium — not yet wired to any visual.
   void progesteroneLevel
 
-  // Endometrium lining — eases toward the target thickness so timeline-anchor
-  // jumps morph smoothly instead of snapping.
-  const [shownThickness, setShownThickness] = useState(endometriumThickness)
-  useEffect(() => {
-    const controls = animate(shownThickness, endometriumThickness, {
-      duration: 0.5, ease: 'easeInOut', onUpdate: (v) => setShownThickness(v),
-    })
-    return () => controls.stop()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endometriumThickness])
-  const endo = endometriumMorph(shownThickness)
+  // Endometrium lining — driven directly from endometriumThickness every
+  // frame, exactly like dominantFollicleRadius/eggProgress below, so it
+  // tracks a timeline drag in real time instead of re-triggering a fresh
+  // tween on every prop change (which starved it mid-drag and only let the
+  // last tween finish once the drag stopped).
+  const endo = endometriumMorph(endometriumThickness)
 
   // ── Pixel-precise click gating ───────────────────────────────────────────
   // The uterus/tube/ovary click targets below (UTERUS_HIT, TUBE_PATH,
@@ -457,17 +452,19 @@ export default function AnatomyLayer({
           Hues align with the ovary's painted salmon-rose palette; the organic
           blob layers below replace any procedural noise. */}
       <defs>
-        {/* Outer membrane: #FFCECE mid-tone, lit upper-left.
+        {/* Outer membrane: #FFC9C9 mid-tone, lit upper-left (all 7 stops shifted by
+            the same tiny delta from the previous #FFCECE mid-tone, preserving the
+            gradient's painterly shape). Shared by every follicle, small and dominant.
             Extra stops at 20 % and 54 % create a non-monotonic dip then lift — the
             gradient no longer eases perfectly, giving a painted rather than rendered look. */}
         <radialGradient id="follicleOuterGrad" cx="33%" cy="25%" r="71%">
-          <stop offset="0%"   stopColor="#FFE8E8" />
-          <stop offset="20%"  stopColor="#FFD8DA" />
-          <stop offset="36%"  stopColor="#FFCECE" />
-          <stop offset="54%"  stopColor="#F8C4C8" />
-          <stop offset="70%"  stopColor="#EAA8B0" />
-          <stop offset="84%"  stopColor="#E29AA4" />
-          <stop offset="100%" stopColor="#C87888" />
+          <stop offset="0%"   stopColor="#FFE3E3" />
+          <stop offset="20%"  stopColor="#FFD3D5" />
+          <stop offset="36%"  stopColor="#FFC9C9" />
+          <stop offset="54%"  stopColor="#F8BFC3" />
+          <stop offset="70%"  stopColor="#EAA3AB" />
+          <stop offset="84%"  stopColor="#E2959F" />
+          <stop offset="100%" stopColor="#C87383" />
         </radialGradient>
         {/* Antrum ring: now near-white (#FEF2F2 mid-tone) — colors swapped with core.
             Stop positions and gradient shape unchanged; only the colour palette swapped. */}
@@ -648,14 +645,17 @@ export default function AnatomyLayer({
             >
               {/* 1 · Outer membrane — slightly irregular silhouette, not a perfect circle */}
               <path d={blobPath} fill="url(#follicleOuterGrad)" />
-              {/* 2 · Shadow crescent */}
-              <path d={blobPath} fill="url(#follicleShadeGrad)" opacity={shadeOpacity} />
+              {/* 2 · Shadow crescent — 10% lighter (outer ring only; follicleShadeGrad
+                  is reused elsewhere at its own opacity, e.g. the granulosa wall ring
+                  below, so the lightening is scoped here via opacity, not the shared
+                  gradient's own stops). */}
+              <path d={blobPath} fill="url(#follicleShadeGrad)" opacity={shadeOpacity * 0.9} />
               {/* Per-follicle shadow weight — some follicles carry heavier pigment */}
               {v.sBoost > 0 && (
-                <path d={blobPath} fill="url(#follicleShadeGrad)" opacity={v.sBoost * shadeOpacity} />
+                <path d={blobPath} fill="url(#follicleShadeGrad)" opacity={v.sBoost * shadeOpacity * 0.9} />
               )}
-              {/* 3 · Crevice / rim shadow */}
-              <path d={blobPath} fill="url(#follicleRimGrad)" />
+              {/* 3 · Crevice / rim shadow — 10% lighter (outer ring only) */}
+              <path d={blobPath} fill="url(#follicleRimGrad)" opacity={0.9} />
 
               {/* ── Organic texture blobs ── */}
 
@@ -774,10 +774,11 @@ export default function AnatomyLayer({
               >
                 {/* 1 · Outer membrane */}
                 <circle cx={domFX} cy={domFY} r={RECRUITED_R} fill="url(#follicleOuterGrad)" />
-                {/* 2 · Shadow crescent */}
-                <circle cx={domFX} cy={domFY} r={RECRUITED_R} fill="url(#follicleShadeGrad)" />
-                {/* 3 · Crevice/rim shadow */}
-                <circle cx={domFX} cy={domFY} r={RECRUITED_R} fill="url(#follicleRimGrad)" />
+                {/* 2 · Shadow crescent — 10% lighter (outer ring only; see small-follicle
+                    note above about follicleShadeGrad being reused elsewhere) */}
+                <circle cx={domFX} cy={domFY} r={RECRUITED_R} fill="url(#follicleShadeGrad)" opacity={0.9} />
+                {/* 3 · Crevice/rim shadow — 10% lighter (outer ring only) */}
+                <circle cx={domFX} cy={domFY} r={RECRUITED_R} fill="url(#follicleRimGrad)" opacity={0.9} />
 
                 {/* A · Ambient highlight */}
                 <ellipse
