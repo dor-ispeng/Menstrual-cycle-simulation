@@ -15,7 +15,7 @@ export const normalCondition: Condition = {
     corpusLuteumRadius:     [0, 0, 0,   0,    0,   0.7, 1.0, 0.25],
     eggProgress:            [-1, -1, -1, -1, 0, 0.20, 0.70, 1.0],
     //                        shed  thinnest  grow  thick  maxProlif  secTrans  secretory  destab
-    endometriumThickness:   [0.15, 0.0,      0.23, 0.37,  0.49,      0.50,     0.54,      0.43],
+    endometriumThickness:   [0.15, 0.0,      0.25, 0.42,  0.58,      0.75,     0.8,       0.50],
     brainActivity:          [0.4, 0.8, 0.6, 0.5,  0.95, 0.3,  0.4,  0.35],
     fsh:                    [25, 65, 40, 25, 28, 12, 12, 28],
     lh:                     [10, 15, 18, 22, 95, 28, 14, 10],
