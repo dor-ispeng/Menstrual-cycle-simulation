@@ -9,11 +9,11 @@ import HormoneGraph from '@/components/HormoneGraph'
 
 export default function ModelPage() {
   return (
-    <div className="w-screen h-screen flex flex-col" style={{ background: 'var(--background)', overflow: 'hidden' }}>
-      <Nav mode="simulation" />
+    <div className="w-screen h-screen flex flex-col" style={{ background: 'var(--background)', overflow: 'hidden', fontFamily: 'var(--font-quicksand), sans-serif' }}>
+      <Nav />
 
       {/* Simulation area */}
-      <div className="relative flex-1 min-h-0" style={{ marginTop: 56, marginBottom: 96 }}>
+      <div className="relative flex-1 min-h-0" style={{ marginBottom: 96 }}>
         <SimulationCanvas />
         <ContentCard />
         <StructurePanel />

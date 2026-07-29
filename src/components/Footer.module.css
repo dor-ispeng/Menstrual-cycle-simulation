@@ -1,0 +1,34 @@
+.scallop {
+  height: 22px;
+  background-image: radial-gradient(circle at 13.2px 0, transparent 13.2px, var(--site-surface-filled) 14.3px);
+  background-size: 26.4px 22px;
+  background-repeat: repeat-x;
+}
+
+.band {
+  background: var(--site-band-footer);
+  padding: 15px clamp(20px, 5vw, 48px) 24px;
+  text-align: center;
+  min-height: 89px;
+}
+
+.content {
+  transform: translateY(-8px);
+}
+
+.label {
+  font-family: var(--font-fredoka), sans-serif;
+  font-weight: 600;
+  color: var(--site-heading-rose);
+  font-size: 13px;
+  margin: 0 0 6px;
+  letter-spacing: 0.3px;
+}
+
+.body {
+  max-width: 900px;
+  margin: 0 auto;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--site-heading-rose);
+}

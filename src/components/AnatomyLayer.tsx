@@ -1052,9 +1052,9 @@ export default function AnatomyLayer({
         <text
           x="300" y="140"
           textAnchor="middle"
-          fontSize="19"
+          fontSize="21"
           fill="#f5cdd4"
-          fontFamily="sans-serif"
+          fontFamily="var(--font-fredoka), sans-serif"
           opacity={0.70}
           style={{ pointerEvents: 'none', userSelect: 'none' }}
         >
@@ -1065,9 +1065,9 @@ export default function AnatomyLayer({
         <text
           x="950" y="95"
           textAnchor="middle"
-          fontSize="17"
+          fontSize="19"
           fill="#f5cdd4"
-          fontFamily="sans-serif"
+          fontFamily="var(--font-fredoka), sans-serif"
           opacity={0.80}
           style={{ pointerEvents: 'none', userSelect: 'none' }}
         >

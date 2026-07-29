@@ -41,8 +41,8 @@ export default function ContentCard() {
         <AnimatePresence mode="wait">
           <motion.p
             key={anchor.id + '-label'}
-            className="text-xs font-bold uppercase tracking-wider mb-2"
-            style={{ color: '#C85C72' }}
+            className="font-bold uppercase tracking-wider mb-2"
+            style={{ color: '#C85C72', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
@@ -64,12 +64,12 @@ export default function ContentCard() {
             {/* Normal Process */}
             <div>
               <span
-                className="inline-block text-xs font-semibold rounded-full px-2 py-0.5 mb-1"
-                style={{ background: '#FCE3E8', color: '#D97A91' }}
+                className="inline-block font-semibold rounded-full px-2 py-0.5 mb-1"
+                style={{ background: '#FCE3E8', color: '#D97A91', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}
               >
                 Normal Process
               </span>
-              <p className="text-xs leading-relaxed" style={{ color: '#5a3040' }}>
+              <p style={{ color: '#5a3040', fontSize: 14, lineHeight: '16.575px' }}>
                 {card.normalProcess}
               </p>
             </div>
@@ -77,12 +77,12 @@ export default function ContentCard() {
             {/* PCOS Change */}
             <div>
               <span
-                className="inline-block text-xs font-semibold rounded-full px-2 py-0.5 mb-1"
-                style={{ background: '#F7CDD5', color: '#B94A62' }}
+                className="inline-block font-semibold rounded-full px-2 py-0.5 mb-1"
+                style={{ background: '#F7CDD5', color: '#B94A62', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}
               >
                 PCOS Change
               </span>
-              <p className="text-xs leading-relaxed" style={{ color: '#5a3040' }}>
+              <p style={{ color: '#5a3040', fontSize: 14, lineHeight: '16.575px' }}>
                 {card.pcosChange}
               </p>
             </div>
@@ -95,7 +95,7 @@ export default function ContentCard() {
                 borderLeft: '4px solid #C85C72',
               }}
             >
-              <p className="text-xs font-semibold" style={{ color: '#8F2F46' }}>
+              <p className="font-semibold" style={{ color: '#8F2F46', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}>
                 ⭐ {card.keyResult}
               </p>
             </div>
@@ -131,7 +131,7 @@ export default function ContentCard() {
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-1">
-        <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--accent)' }}>
+        <p className="font-bold uppercase tracking-wider" style={{ color: 'var(--accent)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}>
           {onAnchor ? 'Event' : 'Transition'}
         </p>
       </div>
@@ -140,8 +140,8 @@ export default function ContentCard() {
       <AnimatePresence mode="wait">
         <motion.h3
           key={title}
-          className="text-sm font-semibold mb-1"
-          style={{ color: 'var(--foreground)' }}
+          className="font-semibold"
+          style={{ color: 'var(--site-heading-rose-dark)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 16, lineHeight: '17px', marginBottom: 6 }}
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -4 }}
@@ -156,8 +156,8 @@ export default function ContentCard() {
         <AnimatePresence mode="wait">
           <motion.p
             key={question}
-            className="text-xs font-medium mb-2"
-            style={{ color: 'var(--lavender)' }}
+            className="font-medium mb-2"
+            style={{ color: 'var(--lavender)', fontSize: 14, lineHeight: '13.6px' }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -173,8 +173,7 @@ export default function ContentCard() {
         <AnimatePresence mode="wait">
           <motion.p
             key={explanation.slice(0, 30)}
-            className="text-xs leading-relaxed"
-            style={{ color: 'var(--text-muted)' }}
+            style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: '16.575px' }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -190,8 +189,8 @@ export default function ContentCard() {
         <>
           <button
             onClick={() => setExpanded((v) => !v)}
-            className="mt-2 text-xs underline cursor-pointer"
-            style={{ color: 'var(--lavender)' }}
+            className="mt-2 underline cursor-pointer"
+            style={{ color: 'var(--lavender)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}
           >
             {expanded ? 'Hide brain events' : 'Show brain events'}
           </button>
@@ -205,7 +204,7 @@ export default function ContentCard() {
                 transition={{ duration: 0.2 }}
               >
                 {brainEvents.map((ev, i) => (
-                  <li key={i} className="text-xs flex gap-1" style={{ color: 'var(--lavender)' }}>
+                  <li key={i} className="flex gap-1" style={{ color: 'var(--lavender)', fontSize: 14, lineHeight: '13.6px' }}>
                     <span>↑</span>{ev}
                   </li>
                 ))}

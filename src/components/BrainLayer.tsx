@@ -170,15 +170,15 @@ export default function BrainLayer({
           style={{ cursor: 'pointer' }}
           onClick={() => onStructureClick?.('brain')} />
         <text x={WIN_CX} y={HYP_CY + 4} textAnchor="middle"
-          fontSize="8.5" fontWeight="600" fill="rgba(75,48,100,0.85)"
-          fontFamily="sans-serif" style={{ pointerEvents: 'none', userSelect: 'none' }}>
+          fontSize="10.5" fontWeight="600" fill="rgba(75,48,100,0.85)"
+          fontFamily="var(--font-fredoka), sans-serif" style={{ pointerEvents: 'none', userSelect: 'none' }}>
           Hypothalamus
         </text>
 
         {/* Connector */}
-        <text x={WIN_CX} y={71} textAnchor="middle" fontSize="11"
+        <text x={WIN_CX} y={71} textAnchor="middle" fontSize="13"
           fill="rgba(140,105,125,0.55)"
-          fontFamily="sans-serif" style={{ pointerEvents: 'none', userSelect: 'none' }}>↓</text>
+          fontFamily="var(--font-fredoka), sans-serif" style={{ pointerEvents: 'none', userSelect: 'none' }}>↓</text>
 
         {/* Pituitary glow ring */}
         <motion.g initial={{ opacity: 0 }} animate={{ opacity: pitGlowOp }} transition={{ duration: 0.5 }}>
@@ -195,8 +195,8 @@ export default function BrainLayer({
           style={{ cursor: 'pointer' }}
           onClick={() => onStructureClick?.('brain')} />
         <text x={WIN_CX} y={PIT_CY + 4} textAnchor="middle"
-          fontSize="9" fontWeight="600" fill="rgba(95,60,80,0.90)"
-          fontFamily="sans-serif" style={{ pointerEvents: 'none', userSelect: 'none' }}>
+          fontSize="11" fontWeight="600" fill="rgba(95,60,80,0.90)"
+          fontFamily="var(--font-fredoka), sans-serif" style={{ pointerEvents: 'none', userSelect: 'none' }}>
           Pituitary
         </text>
 

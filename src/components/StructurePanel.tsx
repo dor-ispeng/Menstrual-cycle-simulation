@@ -50,20 +50,20 @@ export default function StructurePanel() {
           {/* Close */}
           <button
             onClick={() => setSelectedStructure(null)}
-            className="absolute top-3 right-3 text-xs w-5 h-5 flex items-center justify-center rounded-full hover:opacity-70"
-            style={{ background: 'var(--border)', color: 'var(--text-muted)' }}
+            className="absolute top-3 right-3 w-5 h-5 flex items-center justify-center rounded-full hover:opacity-70"
+            style={{ background: 'var(--border)', color: 'var(--text-muted)', fontSize: 14, lineHeight: '13.6px' }}
           >
             ×
           </button>
 
           {/* Zoom hint for granulosa cells */}
           {structure.zoomRequired && (
-            <p className="text-xs mb-2 px-2 py-1 rounded-lg" style={{ background: 'var(--lavender-light)', color: 'var(--lavender)' }}>
+            <p className="mb-2 px-2 py-1 rounded-lg" style={{ background: 'var(--lavender-light)', color: 'var(--lavender)', fontSize: 14, lineHeight: '13.6px' }}>
               Zoom in to see this structure
             </p>
           )}
 
-          <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--accent)' }}>
+          <p className="font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--accent)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}>
             Structure
           </p>
 
@@ -75,31 +75,31 @@ export default function StructurePanel() {
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.18 }}
             >
-              <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--foreground)' }}>
+              <h3 className="font-semibold mb-3" style={{ color: 'var(--site-heading-rose-dark)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 16, lineHeight: '17px' }}>
                 {content?.title ?? structure.name}
               </h3>
 
               {content ? (
                 <div className="space-y-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--lavender)' }}>
+                    <p className="font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--lavender)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}>
                       What&apos;s happening
                     </p>
-                    <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: '16.575px' }}>
                       {content.whatIsHappening}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--lavender)' }}>
+                    <p className="font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--lavender)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}>
                       Why it matters
                     </p>
-                    <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: '16.575px' }}>
                       {content.whyItMatters}
                     </p>
                   </div>
                 </div>
               ) : (
-                <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: '16.575px' }}>
                   {structure.shortDescription}
                 </p>
               )}

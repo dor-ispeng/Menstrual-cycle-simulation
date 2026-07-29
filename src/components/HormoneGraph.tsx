@@ -190,15 +190,14 @@ export default function HormoneGraph() {
             transition={{ duration: 0.2 }}
           >
             {playingFrom && playingTo && (
-              <p className="text-xs font-semibold mb-1.5" style={{ color: 'var(--foreground)' }}>
+              <p className="font-semibold mb-1.5" style={{ color: 'var(--site-heading-rose-dark)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}>
                 {playingFrom.title} → {playingTo.title}
               </p>
             )}
             <AnimatePresence mode="wait">
               <motion.p
                 key={beatIdx}
-                className="text-xs leading-relaxed"
-                style={{ color: 'var(--text-muted)' }}
+                style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: '16.575px' }}
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
@@ -215,8 +214,8 @@ export default function HormoneGraph() {
           <motion.button
             key="next-btn"
             onClick={startPlayback}
-            className="absolute top-2 right-6 z-30 px-4 py-2 rounded-xl text-xs font-semibold shadow-sm"
-            style={{ background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer' }}
+            className="absolute top-2 right-6 z-30 px-4 py-2 rounded-xl font-semibold shadow-sm"
+            style={{ background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
@@ -239,13 +238,13 @@ export default function HormoneGraph() {
             transition={{ duration: 0.2 }}
           >
             {manualFrom && manualTo && (
-              <p className="text-xs font-semibold mb-1" style={{ color: 'var(--foreground)' }}>
+              <p className="font-semibold mb-1" style={{ color: 'var(--site-heading-rose-dark)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}>
                 {manualFrom.title} → {manualTo.title}
               </p>
             )}
             <ul className="space-y-0.5">
               {manualTransition.brainEvents.map((ev, i) => (
-                <li key={i} className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                <li key={i} style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: '16.575px' }}>
                   • {ev}
                 </li>
               ))}
@@ -258,11 +257,14 @@ export default function HormoneGraph() {
       {/* ── Hormones toggle ── */}
       <button
         onClick={toggleHormoneGraph}
-        className="absolute top-20 right-6 z-30 px-3 py-1.5 rounded-xl text-xs font-medium shadow-sm transition-opacity hover:opacity-80"
+        className="absolute top-20 right-6 z-30 px-3 py-1.5 rounded-xl font-medium shadow-sm transition-opacity hover:opacity-80"
         style={{
           background: isHormoneGraphOpen ? 'var(--accent)' : 'var(--surface)',
           color:      isHormoneGraphOpen ? '#fff'          : 'var(--text-muted)',
           border: '1px solid var(--border)',
+          fontFamily: 'var(--font-fredoka), sans-serif',
+          fontSize: 14,
+          lineHeight: '13.6px',
         }}
       >
         Hormones
@@ -279,19 +281,19 @@ export default function HormoneGraph() {
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
           >
-            <p className="text-xs font-semibold mb-3" style={{ color: 'var(--text-muted)' }}>
+            <p className="font-semibold mb-3" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}>
               Hormone Levels (relative, 0–100)
             </p>
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={data} margin={{ top: 4, right: 4, left: -24, bottom: 4 }}>
                 <XAxis dataKey="t" hide />
-                <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} domain={[0, 100]} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} domain={[0, 100]} />
                 <Tooltip
-                  contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid var(--border)' }}
+                  contentStyle={{ fontSize: 13, borderRadius: 8, border: '1px solid var(--border)' }}
                   formatter={(v) => (typeof v === 'number' ? v.toFixed(0) : v)}
                   labelFormatter={() => ''}
                 />
-                <Legend wrapperStyle={{ fontSize: 10 }} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
                 <ReferenceLine x={progress} stroke="var(--accent)" strokeDasharray="4 2" strokeWidth={1.5} />
                 {(Object.keys(COLORS) as (keyof typeof COLORS)[]).map((key) => (
                   <Line
@@ -306,7 +308,7 @@ export default function HormoneGraph() {
                 ))}
               </LineChart>
             </ResponsiveContainer>
-            <p className="text-xs mt-2 text-center" style={{ color: 'var(--text-muted)' }}>
+            <p className="mt-2 text-center" style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: '13.6px' }}>
               Values are simplified and relative — not measured concentrations.
             </p>
           </motion.div>

@@ -29,6 +29,29 @@
   --signal-fsh:    #9a8ac8;
   --signal-lh:     #c96875;
   --signal-feed:   #e8954a;
+
+  /* ---- Site design tokens (marketing pages: Home, Purpose, Model shell, Sources) ---- */
+  /* Backgrounds */
+  --site-bg:                #fdf1ef;
+  --site-bg-section-light:  #FBE3E8;
+  --site-bg-section-pale:   #FDF3F2;
+  --site-band-dark-rose:    #a24f61;
+  --site-band-footer:       #f2a3b8;
+  --site-surface:           #fffaf9;
+  --site-surface-filled:    #f6b9c9;
+
+  /* Text */
+  --site-heading-rose:      #b45c69;
+  --site-heading-rose-dark: #8a4356;
+  --site-body-rose-brown:      #8a4b58;
+  --site-body-rose-brown-dark: #7a3c4a;
+
+  /* Accents & links */
+  --site-accent-rose:       #c66d86;
+  --site-muted-rose:        #c68195;
+  --site-muted-rose-light:  #f3c4d0;
+  --site-link:              #c66d86;
+  --site-link-hover:        #8a4356;
 }
 
 @theme inline {
@@ -39,11 +62,13 @@
   --font-display: var(--font-fredoka);
 }
 
-html,
-body {
+html {
   min-height: 100%;
   overflow-x: hidden;
-  overflow-y: auto;
+}
+
+body {
+  min-height: 100%;
 }
 
 body {
