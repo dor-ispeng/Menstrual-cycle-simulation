@@ -53,16 +53,16 @@ export default function TimelineBar() {
   return (
     <div
       className="fixed bottom-0 left-0 right-0 z-40 px-8 pb-5 pt-3"
-      style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)' }}
+      style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)', fontFamily: 'var(--font-fredoka), sans-serif' }}
     >
       {/* Current event label */}
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs font-semibold" style={{ color: 'var(--accent)' }}>
+        <p className="font-semibold" style={{ color: 'var(--accent)', fontSize: 14, lineHeight: '13.6px' }}>
           {currentAnchor.title}
         </p>
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+        <p style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: '13.6px' }}>
           Drag to explore ·&nbsp;
-          <span style={{ color: 'var(--foreground)' }}>
+          <span style={{ color: 'var(--site-heading-rose-dark)' }}>
             {Math.round(progress * 100)}%
           </span>
         </p>
@@ -107,20 +107,26 @@ export default function TimelineBar() {
 
       {/* Anchor labels */}
       <div className="relative mt-2 h-4">
-        {anchors.map((a) => (
-          <span
-            key={a.id}
-            className="absolute text-xs -translate-x-1/2 whitespace-nowrap"
-            style={{
-              left: `${a.t * 100}%`,
-              color: Math.abs(a.t - progress) < 0.04 ? 'var(--accent)' : 'var(--text-muted)',
-              fontWeight: Math.abs(a.t - progress) < 0.04 ? 600 : 400,
-              fontSize: 9,
-            }}
-          >
-            {a.title}
-          </span>
-        ))}
+        {anchors.map((a, i) => {
+          const isFirst = i === 0
+          const isLast = i === anchors.length - 1
+          const translateX = isFirst ? '0' : isLast ? '-100%' : '-50%'
+          return (
+            <span
+              key={a.id}
+              className="absolute whitespace-nowrap"
+              style={{
+                left: `${a.t * 100}%`,
+                transform: `translateX(${translateX})`,
+                color: Math.abs(a.t - progress) < 0.04 ? 'var(--accent)' : 'var(--text-muted)',
+                fontWeight: Math.abs(a.t - progress) < 0.04 ? 600 : 400,
+                fontSize: 11,
+              }}
+            >
+              {a.title}
+            </span>
+          )
+        })}
       </div>
     </div>
   )

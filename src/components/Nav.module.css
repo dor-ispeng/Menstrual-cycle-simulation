@@ -1,0 +1,173 @@
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--site-bg);
+  border-bottom: 10px solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px clamp(20px, 4vw, 48px);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.logo {
+  height: 46.2px;
+  width: auto;
+  display: block;
+}
+
+.wordmark {
+  font-family: var(--font-fredoka), sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.2;
+  color: var(--site-heading-rose-dark);
+}
+
+.desktopLinks {
+  display: flex;
+  gap: clamp(20px, 3vw, 44px);
+}
+
+.link {
+  font-family: var(--font-fredoka), sans-serif;
+  font-size: 19px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--site-heading-rose-dark);
+  text-decoration: none;
+  padding-bottom: 4px;
+  border-bottom: 2px solid transparent;
+}
+
+.linkActive {
+  border-bottom-color: var(--site-accent-rose);
+}
+
+.modelLinkWrap {
+  position: relative;
+}
+
+.modelDropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  width: 176px;
+  border-radius: 12px;
+  /* Top padding (instead of a margin gap) keeps this box's hoverable area
+     flush against the nav link above it — a margin gap here was a dead zone
+     where the mouse would leave both elements while moving down, firing
+     mouseleave on the wrapper and closing the dropdown before it was reached. */
+  padding: 12px 0 4px;
+  background: var(--site-surface);
+  box-shadow: 0 8px 24px rgba(138, 67, 86, 0.15);
+}
+
+.modelDropdownLabel {
+  margin: 0;
+  padding: 8px 16px 6px;
+  font-family: var(--font-fredoka), sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--site-muted-rose);
+}
+
+.modelDropdownItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  font-family: var(--font-fredoka), sans-serif;
+  font-size: 14px;
+  color: var(--site-heading-rose-dark);
+  cursor: pointer;
+  text-align: left;
+}
+
+.modelDropdownItem:hover {
+  background: var(--site-bg-section-light);
+}
+
+.check {
+  color: var(--site-accent-rose);
+}
+
+.hamburger {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.bar {
+  width: 26px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--site-heading-rose-dark);
+  display: block;
+}
+
+.mobileMenu {
+  position: sticky;
+  top: 72px;
+  z-index: 49;
+  background: var(--site-bg);
+  border-bottom: 1px solid rgba(138, 67, 86, 0.08);
+  display: flex;
+  flex-direction: column;
+  padding: 8px 24px 20px;
+  gap: 4px;
+  animation: slideDown 0.18s ease-out;
+}
+
+.mobileLink {
+  font-family: var(--font-fredoka), sans-serif;
+  font-size: 19px;
+  font-weight: 500;
+  color: var(--site-heading-rose-dark);
+  text-decoration: none;
+  padding: 12px 4px;
+  border-bottom: 1px solid rgba(138, 67, 86, 0.08);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 760px) {
+  .desktopLinks {
+    display: none;
+  }
+  .hamburger {
+    display: flex;
+  }
+}
+
+@media (min-width: 761px) {
+  .mobileMenu {
+    display: none;
+  }
+}

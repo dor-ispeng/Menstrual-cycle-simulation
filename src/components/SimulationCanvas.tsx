@@ -184,8 +184,8 @@ export default function SimulationCanvas() {
     <div className="w-full h-full relative">
       {condition === 'pcos' && (
         <div
-          className="absolute top-3 left-1/2 -translate-x-1/2 z-10 px-4 py-1 rounded-full text-xs font-semibold"
-          style={{ background: 'var(--lavender-light)', color: 'var(--lavender)', border: '1px solid var(--lavender)' }}
+          className="absolute top-3 left-1/2 -translate-x-1/2 z-10 px-4 py-1 rounded-full font-semibold"
+          style={{ background: 'var(--lavender-light)', color: 'var(--lavender)', border: '1px solid var(--lavender)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}
         >
           PCOS pattern
         </div>
@@ -194,20 +194,20 @@ export default function SimulationCanvas() {
       <div className="absolute bottom-3 right-3 z-10 flex flex-col gap-1">
         <button
           onClick={() => transformRef.current?.zoomIn()}
-          className="w-8 h-8 rounded-lg text-sm font-bold flex items-center justify-center hover:opacity-80 transition-opacity"
-          style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--foreground)' }}
+          className="w-8 h-8 rounded-lg font-bold flex items-center justify-center hover:opacity-80 transition-opacity"
+          style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--site-heading-rose-dark)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 16, lineHeight: '17px' }}
           title="Zoom in"
         >+</button>
         <button
           onClick={() => transformRef.current?.zoomOut()}
-          className="w-8 h-8 rounded-lg text-sm font-bold flex items-center justify-center hover:opacity-80 transition-opacity"
-          style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--foreground)' }}
+          className="w-8 h-8 rounded-lg font-bold flex items-center justify-center hover:opacity-80 transition-opacity"
+          style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--site-heading-rose-dark)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 16, lineHeight: '17px' }}
           title="Zoom out"
         >−</button>
         <button
           onClick={handleReset}
-          className="w-8 h-8 rounded-lg text-xs flex items-center justify-center hover:opacity-80 transition-opacity"
-          style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+          className="w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-80 transition-opacity"
+          style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}
           title="Reset view"
         >⌂</button>
       </div>
@@ -225,7 +225,7 @@ export default function SimulationCanvas() {
         onPanningStart={handlePanningStart}
       >
         <TransformComponent
-          wrapperStyle={{ width: '100%', height: '100%', background: '#f5cdd4' }}
+          wrapperStyle={{ width: '100%', height: '100%', background: '#e3a3a8' }}
         >
           {/* Explicit-size div guarantees contentComponent.offsetHeight = CANVAS_H
               regardless of the library's CSS class (height:fit-content). */}
@@ -236,7 +236,39 @@ export default function SimulationCanvas() {
               height={CANVAS_H}
               style={{ display: 'block', userSelect: 'none' }}
             >
-              <rect width={CANVAS_W} height={CANVAS_H} fill="#f5cdd4" />
+              <defs>
+                <radialGradient id="bgGlowBrain" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#f8ddd4" stopOpacity="0.95" />
+                  <stop offset="100%" stopColor="#f8ddd4" stopOpacity="0" />
+                </radialGradient>
+                <radialGradient id="bgGlowAnatomy" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#e0a8ab" stopOpacity="0.9" />
+                  <stop offset="100%" stopColor="#e0a8ab" stopOpacity="0" />
+                </radialGradient>
+                <radialGradient id="bgShadowEdge" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#a15f68" stopOpacity="0.5" />
+                  <stop offset="100%" stopColor="#a15f68" stopOpacity="0" />
+                </radialGradient>
+              </defs>
+
+              {/* Base cavity tone */}
+              <rect width={CANVAS_W} height={CANVAS_H} fill="#e3a3a8" />
+
+              {/* Soft depth shadows along the edges — each ellipse is sized/positioned so its
+                  fade reaches exactly 0% opacity at the canvas boundary (cx = rx, or cx = CANVAS_W - rx,
+                  etc.), so there's no visible seam against the flat wrapper background beyond the frame. */}
+              <ellipse cx={500} cy={450} rx={500} ry={400} fill="url(#bgShadowEdge)" />
+              <ellipse cx={500} cy={1300} rx={500} ry={400} fill="url(#bgShadowEdge)" />
+              <ellipse cx={900} cy={450} rx={500} ry={400} fill="url(#bgShadowEdge)" />
+              <ellipse cx={900} cy={1300} rx={500} ry={400} fill="url(#bgShadowEdge)" />
+              <ellipse cx={700} cy={350} rx={600} ry={350} fill="url(#bgShadowEdge)" />
+              <ellipse cx={700} cy={1450} rx={650} ry={350} fill="url(#bgShadowEdge)" />
+
+              {/* Lighter "cavity" glow pockets behind the brain and the uterus/ovary/tube group,
+                  so a lit-interior look is visible at typical pan/zoom, not just fully zoomed out. */}
+              <ellipse cx={700} cy={65} rx={95} ry={60} fill="url(#bgGlowBrain)" />
+              <ellipse cx={700} cy={700} rx={620} ry={480} fill="url(#bgGlowAnatomy)" />
+              <ellipse cx={980} cy={580} rx={320} ry={260} fill="url(#bgGlowAnatomy)" />
 
               {/* Anatomy group: shifts all AnatomyLayer elements so uterus top
                   lands at canvas y=315 and bottom at y=1125. */}

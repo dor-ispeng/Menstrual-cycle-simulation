@@ -1,0 +1,31 @@
+.heroRow {
+  display: flex;
+  gap: clamp(24px, 4vw, 48px);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.cardsRow {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+/*
+  The illustration/cards overlap effect only makes sense when the hero row
+  renders as a single side-by-side line (its natural height stays modest).
+  Below this width the row wraps into a tall stacked column, and translateY(-15%)
+  (a percentage of that much taller height) would shift the heading up far
+  enough to hide behind the sticky nav — so the overlap is desktop-only.
+*/
+@media (min-width: 900px) {
+  .heroRow {
+    transform: translateY(-15%);
+    margin-bottom: -138px;
+  }
+
+  .cardsRow {
+    transform: translateY(-20px);
+  }
+}

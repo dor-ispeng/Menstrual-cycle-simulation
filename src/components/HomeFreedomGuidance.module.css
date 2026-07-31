@@ -1,0 +1,15 @@
+.orRow {
+  max-width: 1000px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 560px) {
+  .orRow {
+    flex-direction: column;
+  }
+}
