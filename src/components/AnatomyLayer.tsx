@@ -81,8 +81,8 @@ const TUBE_HIT_PATH =
 // the ovary's upper-right edge sits under the fimbriae opening at (1089,498).
 // Positive x = right, negative y = up. Applied via a single wrapper <g>
 // transform in the render tree — the coordinates below stay unchanged.
-const OVARY_DX = -18
-const OVARY_DY = -118
+export const OVARY_DX = -18
+export const OVARY_DY = -118
 
 // Bezier-approximated ellipse (rx=185, ry=150, Bézier factor ≈ 0.5523)
 // Centred at (830,630) so the right edge sits at x≈1015, giving a clear
@@ -105,15 +105,17 @@ const OVARY_PATH =
 // All positions shifted 50 px left to match the new ovary centre (830,630).
 // Each point has ≥40 px clearance from the ovary boundary.
 
-// Only indices 1–7 ever render on screen (smallFollicleCount tops out at 8,
-// and the fraction formula below zeroes out at i=8), so indices 8–11 are
-// unused reserve slots. Index 5 was moved from its original right/lower-right
-// scatter position onto index 8's old (unused) left-side coordinates.
+// Normal cycle's smallFollicleCount tops out at 8, so only indices 1–7 ever
+// render there and indices 8–11 sit unused. PCOS uses up to 12, so indices
+// 1–11 all render — every slot must be distinct. Index 5 was moved from its
+// original right/lower-right scatter position onto what was index 8's old
+// (then-unused) left-side coordinates; index 8 has since been moved off that
+// same spot to its own unused slot to avoid the resulting overlap.
 const FOLLICLE_POSITIONS: [number, number][] = [
   [845, 615],  // [0] dominant candidate — grows with dominantFollicleRadius
   [790, 545], [845, 540], [920, 555],  // upper scatter
   [960, 615], [750, 620], [880, 700],  // [5] moved to the left side (was [940,670])
-  [775, 680], [750, 620],              // left scatter
+  [775, 680], [940, 670],              // [8] moved off [5]'s old spot to avoid overlap
   [810, 595], [905, 595], [850, 670],  // inner scatter (unused)
 ]
 
@@ -342,9 +344,13 @@ export default function AnatomyLayer({
   zoomLevel = 1,
   onStructureClick,
 }: Props) {
-  // Reserved for a future progesterone-driven secretory-phase tint on the
-  // endometrium — not yet wired to any visual.
-  void progesteroneLevel
+  // Secretory-phase tint: progesterone transforms the lining from merely
+  // "thick" (estrogen-driven proliferation) into glandular, nutrient-rich
+  // tissue. Below ~0.3 (PCOS never crosses this — its progesterone stays
+  // low because no corpus luteum forms) no tint is applied; above it, a
+  // warm overlay fades in atop the base endometrium color, peaking at 0.5
+  // opacity once progesterone is fully elevated (normal's Preparation stage).
+  const secretoryTintOpacity = Math.min(1, Math.max(0, (progesteroneLevel - 0.3) / 0.7)) * 0.5
 
   // Endometrium lining — driven directly from endometriumThickness every
   // frame, exactly like dominantFollicleRadius/eggProgress below, so it
@@ -1033,6 +1039,14 @@ export default function AnatomyLayer({
           {endo.paths.map((d, i) => (
             <path key={i} d={d} fill={endo.color} stroke={endo.color} strokeWidth={1} />
           ))}
+          {/* Secretory-phase tint — progesterone-driven, see secretoryTintOpacity above */}
+          {secretoryTintOpacity > 0 && (
+            <g style={{ pointerEvents: 'none' }}>
+              {endo.paths.map((d, i) => (
+                <path key={`secretory-${i}`} d={d} fill="#7A2438" opacity={secretoryTintOpacity} />
+              ))}
+            </g>
+          )}
         </g>
 
         {/* Invisible thick-stroke click target along the tube centreline;

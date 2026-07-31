@@ -10,7 +10,7 @@ import { useSimulationStore } from '@/store/simulation'
 import { conditions } from '@/data/conditions'
 import { anchorTs, anchors } from '@/data/anchors'
 import { interpolateKeyframes, activeTransitionIndex, nearestAnchorIndex } from '@/utils/interpolate'
-import { transitions } from '@/data/transitions'
+import { getTransitions } from '@/data/transitions'
 import type { Transition } from '@/types/simulation'
 
 const COLORS = {
@@ -45,6 +45,7 @@ export default function HormoneGraph() {
 
   const cond = conditions.find((c) => c.id === condition) ?? conditions[0]
   const kf   = cond.keyframes
+  const activeTransitions = getTransitions(condition)
 
   // ── Timeline position ──────────────────────────────────────────────────────
   const nearestIdx   = nearestAnchorIndex(anchorTs, progress)
@@ -53,7 +54,7 @@ export default function HormoneGraph() {
 
   // Transition being crossed during free (non-guided) scrubbing
   const manualTransIdx = !isPlaying ? activeTransitionIndex(anchorTs, progress) : -1
-  const manualTransition: Transition | null = manualTransIdx >= 0 ? (transitions[manualTransIdx] ?? null) : null
+  const manualTransition: Transition | null = manualTransIdx >= 0 ? (activeTransitions[manualTransIdx] ?? null) : null
   const manualFrom = manualTransition ? anchors.find(a => a.id === manualTransition.fromAnchorId) : null
   const manualTo   = manualTransition ? anchors.find(a => a.id === manualTransition.toAnchorId)   : null
 
@@ -106,8 +107,8 @@ export default function HormoneGraph() {
 
     const fromA = anchors[idx]!
     const toA   = anchors[idx + 1]!
-    const tIdx  = transitions.findIndex(t => t.fromAnchorId === fromA.id)
-    const trans  = tIdx >= 0 ? transitions[tIdx] : null
+    const tIdx  = activeTransitions.findIndex(t => t.fromAnchorId === fromA.id)
+    const trans  = tIdx >= 0 ? activeTransitions[tIdx] : null
 
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current)
@@ -128,7 +129,7 @@ export default function HormoneGraph() {
     setProgress(fromA.t)   // snap to exact anchor before animating
     setIsPlaying(true)
     rafRef.current = requestAnimationFrame(tick)
-  }, [nearestIdx, onAnchor, setProgress, setIsPlaying, tick])
+  }, [nearestIdx, onAnchor, activeTransitions, setProgress, setIsPlaying, tick])
 
   useEffect(() => {
     return () => {
@@ -139,7 +140,7 @@ export default function HormoneGraph() {
   // ── Beat display ───────────────────────────────────────────────────────────
   const pb = playbackRef.current
   const playingTransition: Transition | null =
-    isPlaying && pb ? (transitions[pb.fromTransitionIdx] ?? null) : null
+    isPlaying && pb ? (activeTransitions[pb.fromTransitionIdx] ?? null) : null
   const playingFrom = playingTransition
     ? anchors.find(a => a.id === playingTransition.fromAnchorId)
     : null

@@ -1,6 +1,8 @@
 'use client'
 
 import { motion } from 'framer-motion'
+import type { HormoneKey, StagePrimaryHormones } from '@/types/simulation'
+import { OVARY_DX, OVARY_DY } from './AnatomyLayer'
 
 // ── Brain geometry ─────────────────────────────────────────────────────────────
 // Brain structures sit near the very top of the canvas (y ≈ 0–112).
@@ -24,64 +26,55 @@ const C_PROG  = '#5aab8a'   // green
 type Pt = { sx: number; sy: number; ex: number; ey: number; r: number; delay: number }
 
 // ── Particle pools ─────────────────────────────────────────────────────────────
-// All anatomy positions are offset +250 px vertically (the anatomy group is
-// wrapped in translate(0, 250) in SimulationCanvas). FOLLICLE_POSITIONS in
-// AnatomyLayer are in local coords; add 250 to match canvas-space positions.
+// Base positions below are canvas-space BEFORE the ovary group's own offset:
+// local follicle y + 250 (the anatomy group's translate in SimulationCanvas).
+// The ovary group (ovary + follicles + corpus luteum) is then shifted by
+// (OVARY_DX, OVARY_DY) inside AnatomyLayer, so every follicle-side endpoint
+// here adds that same offset to stay aligned with where the follicles are
+// actually drawn. Brain-side coordinates (WIN_CX, EMIT_Y, ARRIVE_Y) are
+// unaffected and left as-is.
 
 // FSH: 6 particles fanning toward the follicle ring from the pituitary.
 const FSH_PTS: Pt[] = [
-  { sx: WIN_CX, sy: EMIT_Y, ex: 702, ey: 885, r: 10, delay: 0.0 },
-  { sx: WIN_CX, sy: EMIT_Y, ex: 732, ey: 948, r:  9, delay: 1.0 },
-  { sx: WIN_CX, sy: EMIT_Y, ex: 850, ey: 770, r: 11, delay: 2.0 },
-  { sx: WIN_CX, sy: EMIT_Y, ex: 845, ey: 865, r: 10, delay: 0.4 },
-  { sx: WIN_CX, sy: EMIT_Y, ex: 948, ey: 833, r:  9, delay: 3.0 },
-  { sx: WIN_CX, sy: EMIT_Y, ex: 920, ey: 956, r:  9, delay: 4.0 },
+  { sx: WIN_CX, sy: EMIT_Y, ex: 702 + OVARY_DX, ey: 885 + OVARY_DY, r: 10, delay: 0.0 },
+  { sx: WIN_CX, sy: EMIT_Y, ex: 732 + OVARY_DX, ey: 948 + OVARY_DY, r:  9, delay: 1.0 },
+  { sx: WIN_CX, sy: EMIT_Y, ex: 850 + OVARY_DX, ey: 770 + OVARY_DY, r: 11, delay: 2.0 },
+  { sx: WIN_CX, sy: EMIT_Y, ex: 845 + OVARY_DX, ey: 865 + OVARY_DY, r: 10, delay: 0.4 },
+  { sx: WIN_CX, sy: EMIT_Y, ex: 948 + OVARY_DX, ey: 833 + OVARY_DY, r:  9, delay: 3.0 },
+  { sx: WIN_CX, sy: EMIT_Y, ex: 920 + OVARY_DX, ey: 956 + OVARY_DY, r:  9, delay: 4.0 },
 ]
 
 // LH: 4 particles converging on the dominant follicle.
 const LH_PTS: Pt[] = [
-  { sx: WIN_CX, sy: EMIT_Y, ex: 834, ey: 808, r: 13, delay: 0.0 },
-  { sx: WIN_CX, sy: EMIT_Y, ex: 845, ey: 810, r: 12, delay: 0.6 },
-  { sx: WIN_CX, sy: EMIT_Y, ex: 838, ey: 810, r: 11, delay: 1.2 },
-  { sx: WIN_CX, sy: EMIT_Y, ex: 851, ey: 805, r: 10, delay: 1.8 },
+  { sx: WIN_CX, sy: EMIT_Y, ex: 834 + OVARY_DX, ey: 808 + OVARY_DY, r: 13, delay: 0.0 },
+  { sx: WIN_CX, sy: EMIT_Y, ex: 845 + OVARY_DX, ey: 810 + OVARY_DY, r: 12, delay: 0.6 },
+  { sx: WIN_CX, sy: EMIT_Y, ex: 838 + OVARY_DX, ey: 810 + OVARY_DY, r: 11, delay: 1.2 },
+  { sx: WIN_CX, sy: EMIT_Y, ex: 851 + OVARY_DX, ey: 805 + OVARY_DY, r: 10, delay: 1.8 },
 ]
 
-// Estrogen from multiple follicles (early cycle). sy = local y + 250.
+// Estrogen from multiple follicles (early cycle). Base sy = local y + 250.
 const EST_MULTI_PTS: Pt[] = [
-  { sx: 800, sy: 785, ex: 686, ey: ARRIVE_Y, r: 10, delay: 0.0 },
-  { sx: 905, sy: 788, ex: 703, ey: ARRIVE_Y, r:  9, delay: 1.1 },
-  { sx: 948, sy: 833, ex: 710, ey: ARRIVE_Y, r:  9, delay: 2.2 },
-  { sx: 732, sy: 948, ex: 694, ey: ARRIVE_Y, r:  9, delay: 3.3 },
+  { sx: 800 + OVARY_DX, sy: 785 + OVARY_DY, ex: 686, ey: ARRIVE_Y, r: 10, delay: 0.0 },
+  { sx: 905 + OVARY_DX, sy: 788 + OVARY_DY, ex: 703, ey: ARRIVE_Y, r:  9, delay: 1.1 },
+  { sx: 948 + OVARY_DX, sy: 833 + OVARY_DY, ex: 710, ey: ARRIVE_Y, r:  9, delay: 2.2 },
+  { sx: 732 + OVARY_DX, sy: 948 + OVARY_DY, ex: 694, ey: ARRIVE_Y, r:  9, delay: 3.3 },
 ]
 
-// Estrogen from dominant follicle / CL (late cycle). sy = 615 + 250 = 865.
+// Estrogen from dominant follicle / CL (late cycle). Base (845, 865) =
+// local (845, 615) + 250 — the dominant follicle's position.
 const EST_DOM_PTS: Pt[] = [
-  { sx: 845, sy: 865, ex: 700, ey: ARRIVE_Y, r: 10, delay: 0.0 },
-  { sx: 845, sy: 865, ex: 690, ey: ARRIVE_Y, r:  9, delay: 0.9 },
-  { sx: 845, sy: 865, ex: 710, ey: ARRIVE_Y, r: 10, delay: 1.8 },
+  { sx: 845 + OVARY_DX, sy: 865 + OVARY_DY, ex: 700, ey: ARRIVE_Y, r: 10, delay: 0.0 },
+  { sx: 845 + OVARY_DX, sy: 865 + OVARY_DY, ex: 690, ey: ARRIVE_Y, r:  9, delay: 0.9 },
+  { sx: 845 + OVARY_DX, sy: 865 + OVARY_DY, ex: 710, ey: ARRIVE_Y, r: 10, delay: 1.8 },
 ]
 
-// Progesterone from CL — broader spread than estrogen. sy = 615 + 250 = 865.
+// Progesterone from CL — broader spread than estrogen. Same base as EST_DOM_PTS.
 const PROG_PTS: Pt[] = [
-  { sx: 845, sy: 865, ex: 700, ey: ARRIVE_Y, r: 11, delay: 0.0 },
-  { sx: 845, sy: 865, ex: 682, ey: ARRIVE_Y, r:  9, delay: 1.0 },
-  { sx: 845, sy: 865, ex: 718, ey: ARRIVE_Y, r: 10, delay: 2.0 },
-  { sx: 845, sy: 865, ex: 700, ey: ARRIVE_Y, r:  9, delay: 3.0 },
+  { sx: 845 + OVARY_DX, sy: 865 + OVARY_DY, ex: 700, ey: ARRIVE_Y, r: 11, delay: 0.0 },
+  { sx: 845 + OVARY_DX, sy: 865 + OVARY_DY, ex: 682, ey: ARRIVE_Y, r:  9, delay: 1.0 },
+  { sx: 845 + OVARY_DX, sy: 865 + OVARY_DY, ex: 718, ey: ARRIVE_Y, r: 10, delay: 2.0 },
+  { sx: 845 + OVARY_DX, sy: 865 + OVARY_DY, ex: 700, ey: ARRIVE_Y, r:  9, delay: 3.0 },
 ]
-
-// ── Stage-based primary hormone ───────────────────────────────────────────────
-const PRIMARY_BY_STAGE = [
-  'progesterone',
-  'fsh',
-  'estrogen',
-  'estrogen',
-  'lh',
-  'progesterone',
-  'progesterone',
-] as const
-
-type HormoneKey = 'fsh' | 'lh' | 'estrogen' | 'progesterone'
-const SECONDARY_DIM = 0.20
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function levelToOpacity(level: number): number {
@@ -103,6 +96,8 @@ type Props = {
   corpusLuteumRadius:     number
   stageIndex:             number
   isOnAnchor?:            boolean
+  primaryHormoneByStage:  StagePrimaryHormones
+  secondaryDim:           number
   onStructureClick?:      (id: string) => void
 }
 
@@ -110,14 +105,16 @@ export default function BrainLayer({
   fshLevel, lhLevel, estrogenLevel, progesteroneLevel,
   dominantFollicleRadius, corpusLuteumRadius, stageIndex,
   isOnAnchor = false,
+  primaryHormoneByStage,
+  secondaryDim,
   onStructureClick,
 }: Props) {
-  const primary: HormoneKey = PRIMARY_BY_STAGE[stageIndex] ?? 'fsh'
+  const primary: HormoneKey = primaryHormoneByStage[stageIndex] ?? primaryHormoneByStage[0]
 
-  const fshScale  = primary === 'fsh'          ? 1.0 : SECONDARY_DIM
-  const lhScale   = primary === 'lh'           ? 1.0 : SECONDARY_DIM
-  const estScale  = primary === 'estrogen'     ? 1.0 : SECONDARY_DIM
-  const progScale = primary === 'progesterone' ? 1.0 : SECONDARY_DIM
+  const fshScale  = primary === 'fsh'          ? 1.0 : secondaryDim
+  const lhScale   = primary === 'lh'           ? 1.0 : secondaryDim
+  const estScale  = primary === 'estrogen'     ? 1.0 : secondaryDim
+  const progScale = primary === 'progesterone' ? 1.0 : secondaryDim
 
   // Estrogen source blending
   const focus     = Math.max(dominantFollicleRadius, corpusLuteumRadius)

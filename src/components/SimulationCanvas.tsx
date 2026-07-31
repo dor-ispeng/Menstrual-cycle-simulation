@@ -14,6 +14,11 @@ const CANVAS_W = 1400
 // gives the library a real negative minY to work with before our override.
 const CANVAS_H = 1800
 
+// Vertical shift applied to the whole AnatomyLayer group (see the <g transform>
+// below). Exported so other components (e.g. BrainLayer's particle endpoints)
+// can derive canvas-space anatomy coordinates instead of re-hardcoding this.
+export const ANATOMY_GROUP_Y_OFFSET = 250
+
 // Normalisation denominators: peak values from normal-cycle keyframes
 const FSH_NORM  = 65
 const LH_NORM   = 95
@@ -233,9 +238,9 @@ export default function SimulationCanvas() {
             >
               <rect width={CANVAS_W} height={CANVAS_H} fill="#f5cdd4" />
 
-              {/* Anatomy group: translate(0, 250) shifts all AnatomyLayer elements
-                  so uterus top lands at canvas y=315 and bottom at y=1125. */}
-              <g transform="translate(0, 250)">
+              {/* Anatomy group: shifts all AnatomyLayer elements so uterus top
+                  lands at canvas y=315 and bottom at y=1125. */}
+              <g transform={`translate(0, ${ANATOMY_GROUP_Y_OFFSET})`}>
                 <AnatomyLayer
                   smallFollicleCount={smallFollicleCount}
                   dominantFollicleRadius={dominantFollicleR}
@@ -259,6 +264,8 @@ export default function SimulationCanvas() {
                 corpusLuteumRadius={corpusLuteumR}
                 stageIndex={stageIndex}
                 isOnAnchor={isOnAnchor}
+                primaryHormoneByStage={cond.primaryHormoneByStage}
+                secondaryDim={cond.secondaryDim}
                 onStructureClick={setSelectedStructure}
               />
             </svg>

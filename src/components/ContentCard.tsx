@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSimulationStore } from '@/store/simulation'
 import { anchors, anchorTs } from '@/data/anchors'
-import { transitions } from '@/data/transitions'
+import { getTransitions } from '@/data/transitions'
 import { nearestAnchorIndex, activeTransitionIndex } from '@/utils/interpolate'
 import { pcosCards } from '@/data/pcosCards'
 
@@ -17,7 +17,7 @@ export default function ContentCard() {
   const onAnchor = transitionIdx === -1
 
   const anchor = anchors[nearestIdx]
-  const transition = transitionIdx >= 0 ? transitions[transitionIdx] : null
+  const transition = transitionIdx >= 0 ? getTransitions(condition)[transitionIdx] : null
 
   const isPcos = condition === 'pcos'
 

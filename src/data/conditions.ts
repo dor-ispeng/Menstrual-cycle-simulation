@@ -22,6 +22,10 @@ export const normalCondition: Condition = {
     estrogen:               [18, 32, 55, 82, 68, 42, 62, 14],
     progesterone:           [10, 10, 10, 12, 14, 22, 80, 12],
   },
+  // One entry per transition — which hormone is visually emphasized as the
+  // "driver" of that stage. Non-primary hormones dim to secondaryDim.
+  primaryHormoneByStage: ['progesterone', 'fsh', 'estrogen', 'estrogen', 'lh', 'progesterone', 'progesterone'],
+  secondaryDim: 0.20,
 }
 
 export const pcosCondition: Condition = {
@@ -44,6 +48,12 @@ export const pcosCondition: Condition = {
     estrogen:               [18, 28, 42, 48, 46, 35, 42, 20],
     progesterone:           [10, 10, 10, 11, 11, 11, 14, 10],
   },
+  // No LH surge occurs in PCOS, so LH must never be spotlit as the driver of
+  // ovulation — FSH/estrogen carry emphasis throughout instead. LH stays
+  // visible (it's genuinely elevated) but at a less dimmed baseline than
+  // normal's non-primary hormones, so "elevated but flat" reads clearly.
+  primaryHormoneByStage: ['fsh', 'fsh', 'estrogen', 'estrogen', 'estrogen', 'estrogen', 'fsh'],
+  secondaryDim: 0.45,
 }
 
 export const conditions: Condition[] = [normalCondition, pcosCondition]

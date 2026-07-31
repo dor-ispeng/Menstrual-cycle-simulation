@@ -1,5 +1,7 @@
-import { Transition } from '@/types/simulation'
+import { ConditionId, Transition } from '@/types/simulation'
 
+// Normal-cycle transitions. Kept as the original array so existing index
+// math (findIndex/positional lookups) is unchanged.
 export const transitions: Transition[] = [
   {
     fromAnchorId: 'cycle-end',
@@ -94,3 +96,105 @@ export const transitions: Transition[] = [
     guidedDuration: 10,
   },
 ]
+
+// PCOS transitions — same fromAnchorId/toAnchorId pairs, in the same order, so
+// HormoneGraph's positional lookups (findIndex, index arithmetic) work
+// unchanged regardless of which set is active.
+export const pcosTransitions: Transition[] = [
+  {
+    fromAnchorId: 'cycle-end',
+    toAnchorId: 'recruitment',
+    explanation:
+      'Progesterone was never high, so there is no true withdrawal. FSH rises into an ovary that still holds arrested follicles from previous cycles, and a new cohort begins growing alongside them.',
+    brainEvents: ['FSH rising from pituitary', 'LH already elevated at baseline'],
+    beats: [
+      'Progesterone was never high, so there is no true withdrawal.',
+      'FSH rises into an ovary that still holds arrested follicles.',
+      'A new cohort begins growing alongside the old ones.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'recruitment',
+    toAnchorId: 'competition',
+    explanation:
+      'Many follicles grow, but none pulls ahead. Excess androgen production blunts each follicle\'s response to FSH, and estrogen stays too low to reshape the cohort.',
+    brainEvents: ['FSH only weakly suppressed', 'LH remains elevated'],
+    beats: [
+      'Many follicles grow, but none pulls ahead.',
+      'Excess androgen blunts each follicle\'s response to FSH.',
+      'Estrogen stays too low to reshape the cohort.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'competition',
+    toAnchorId: 'dominant',
+    explanation:
+      'No single follicle outpaces the others. The cohort arrests at a similar, small size, and dominant-follicle selection fails.',
+    brainEvents: ['Estrogen feedback remains weak', 'LH to FSH ratio stays high'],
+    beats: [
+      'No single follicle outpaces the others.',
+      'The cohort arrests at a similar, small size.',
+      'Selection fails — there is no dominant follicle.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'dominant',
+    toAnchorId: 'ovulation-decision',
+    explanation:
+      'Estrogen never sustains above the ovulation threshold. The hypothalamus stays in negative feedback, and no LH surge is triggered.',
+    brainEvents: ['Positive feedback switch never occurs', 'LH stays elevated but flat'],
+    beats: [
+      'Estrogen never sustains above the ovulation threshold.',
+      'The hypothalamus stays in negative feedback.',
+      'No LH surge is triggered.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'ovulation-decision',
+    toAnchorId: 'after-release',
+    explanation:
+      'Without a surge, the follicle wall is never weakened. No follicle ruptures and no egg is released — the arrested follicles remain in the ovary, and no corpus luteum forms.',
+    brainEvents: ['No LH surge', 'Progesterone stays low'],
+    beats: [
+      'Without a surge, the follicle wall is never weakened.',
+      'No follicle ruptures and no egg is released.',
+      'The arrested follicles remain in the ovary.',
+      'No corpus luteum forms.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'after-release',
+    toAnchorId: 'preparation',
+    explanation:
+      'With no corpus luteum, progesterone stays low. The lining continues thickening under unopposed estrogen but never becomes secretory.',
+    brainEvents: ['No progesterone feedback', 'GnRH pulses remain rapid'],
+    beats: [
+      'With no corpus luteum, progesterone stays low.',
+      'The lining continues under unopposed estrogen.',
+      'It thickens but never becomes secretory.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'preparation',
+    toAnchorId: 'continue-restart',
+    explanation:
+      'There is no progesterone to withdraw. Bleeding becomes irregular, delayed, or absent, and the next cycle often begins with the same arrested follicles still present.',
+    brainEvents: ['FSH rising again', 'No progesterone withdrawal'],
+    beats: [
+      'There is no progesterone to withdraw.',
+      'Bleeding becomes irregular, delayed, or absent.',
+      'The next cycle begins with the same arrested follicles.',
+    ],
+    guidedDuration: 7,
+  },
+]
+
+export function getTransitions(condition: ConditionId): Transition[] {
+  return condition === 'pcos' ? pcosTransitions : transitions
+}

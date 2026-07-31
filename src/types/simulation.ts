@@ -1,5 +1,14 @@
 export type ConditionId = 'normal' | 'pcos'
 
+export type HormoneKey = 'fsh' | 'lh' | 'estrogen' | 'progesterone'
+
+// One entry per transition (7 total) — which hormone is visually "primary"
+// during that stage of the cycle.
+export type StagePrimaryHormones = [
+  HormoneKey, HormoneKey, HormoneKey, HormoneKey,
+  HormoneKey, HormoneKey, HormoneKey,
+]
+
 export type Anchor = {
   id: string
   title: string
@@ -54,4 +63,6 @@ export type Condition = {
   label: string
   description: string
   keyframes: ConditionKeyframes
+  primaryHormoneByStage: StagePrimaryHormones
+  secondaryDim: number
 }
