@@ -301,7 +301,8 @@ type Props = {
   corpusLuteumRadius: number      // 0–1
   eggProgress: number             // –1=hidden, 0=just released, 1=in tube
   endometriumThickness: number    // 0–1
-  fshLevel: number                // 0–1 — drives follicle glow response
+  fshLevel: number                // 0–1 — drives FSH glow opacity ("how loud")
+  follicleFshDrive: number        // 0–1 — drives follicle growth ("how much grows")
   lhLevel: number                 // 0–1 — drives dominant follicle activation ring
   progesteroneLevel: number       // 0–1 — drives endometrium secretory response
   zoomLevel?: number
@@ -339,6 +340,7 @@ export default function AnatomyLayer({
   eggProgress,
   endometriumThickness,
   fshLevel,
+  follicleFshDrive,
   lhLevel,
   progesteroneLevel,
   zoomLevel = 1,
@@ -350,7 +352,7 @@ export default function AnatomyLayer({
   // low because no corpus luteum forms) no tint is applied; above it, a
   // warm overlay fades in atop the base endometrium color, peaking at 0.5
   // opacity once progesterone is fully elevated (normal's Preparation stage).
-  const secretoryTintOpacity = Math.min(1, Math.max(0, (progesteroneLevel - 0.3) / 0.7)) * 0.5
+  const secretoryTintOpacity = Math.min(1, Math.max(0, (progesteroneLevel - 0.25) / 0.5)) * 0.5
 
   // Endometrium lining — driven directly from endometriumThickness every
   // frame, exactly like dominantFollicleRadius/eggProgress below, so it
@@ -568,7 +570,7 @@ export default function AnatomyLayer({
         Rendered between OvaryGroup and FolliclesGroup so glows sit behind
         the follicle circles.
       */}
-      {fshLevel > 0.12 && (
+      {fshLevel > 0.10 && (
         <g id="FSHGlowGroup" style={{ pointerEvents: 'none' }}>
           {FOLLICLE_POSITIONS.map(([fx, fy], i) => {
             if (i === DOMINANT_IDX) {
@@ -589,8 +591,10 @@ export default function AnatomyLayer({
             // Follicles swell from the follic1.svg scale toward the larger
             // follic2.svg scale as FSH rises through recruitment — the glow
             // ring tracks the same growth so it always sits just outside
-            // the visible follicle body.
-            const growT   = Math.min(1, Math.max(0, (fshLevel - 0.3) / 0.7))
+            // the visible follicle body. Driven by follicleFshDrive (not raw
+            // fshLevel) so a condition can keep the glow bright while
+            // suppressing actual growth — see the Props comment.
+            const growT   = Math.min(1, Math.max(0, (follicleFshDrive - 0.20) / 0.45))
             const targetR = BASE_R + (RECRUITED_R - BASE_R) * growT
             return (
               <motion.circle key={`fsh-glow-${i}`} cx={fx} cy={fy} r={targetR * fraction + 5}
@@ -626,7 +630,8 @@ export default function AnatomyLayer({
 
           // FSH-driven growth: follic1 scale (BASE_R) at cycle-end →
           // follic2 scale (RECRUITED_R) once FSH rises through recruitment.
-          const growT   = Math.min(1, Math.max(0, (fshLevel - 0.3) / 0.7))
+          // Driven by follicleFshDrive, not raw fshLevel — see Props comment.
+          const growT   = Math.min(1, Math.max(0, (follicleFshDrive - 0.20) / 0.45))
           const targetR = BASE_R + (RECRUITED_R - BASE_R) * growT
           const scale   = (targetR / RECRUITED_R) * fraction
 
@@ -765,6 +770,20 @@ export default function AnatomyLayer({
             style={{ cursor: 'pointer' }}
             onClick={() => onStructureClick(eggProgress < COLLAPSE_END ? 'follicle' : 'corpus-luteum')}
           >
+            {/* Invisible hit target. CorpusLuteumRosette (and Corp1/2/3Lobes)
+                render their artwork with pointerEvents:'none', so once the
+                follicle fades out (follicleVisible = false) this group would
+                have no interactive descendant left and the click handler
+                above would be unreachable — the corpus luteum phase would be
+                permanently unclickable. This transparent circle guarantees an
+                always-present hit area; it sits behind the visible artwork so
+                it never affects appearance, and during the follicle phase the
+                follicle art on top still routes to the same handler. */}
+            <circle
+              cx={domFX} cy={domFY} r={structR}
+              fill="transparent"
+              style={{ pointerEvents: 'fill' }}
+            />
             {follicleVisible && (
               /*
                 Graafian follicle: stays fully intact through the Ovulation
@@ -961,7 +980,7 @@ export default function AnatomyLayer({
           "activation" signal — the follicle wall is about to rupture.
           Only shown pre-ovulation when the follicle is large enough to ovulate.
         */}
-        {lhLevel > 0.18 && isPreOvulation && dominantFollicleRadius > 0.12 && structR > BASE_R && (
+        {lhLevel > 0.15 && isPreOvulation && dominantFollicleRadius > 0.12 && structR > BASE_R && (
           <motion.circle
             cx={domFX} cy={domFY}
             r={structR + 16}

@@ -6,7 +6,8 @@ import { useSimulationStore } from '@/store/simulation'
 import { anchors, anchorTs } from '@/data/anchors'
 import { getTransitions } from '@/data/transitions'
 import { nearestAnchorIndex, activeTransitionIndex } from '@/utils/interpolate'
-import { pcosCards } from '@/data/pcosCards'
+import { normalProcessByAnchor, conditionCards } from '@/data/conditionCards'
+import { conditions } from '@/data/conditions'
 
 export default function ContentCard() {
   const { progress, condition } = useSimulationStore()
@@ -19,10 +20,11 @@ export default function ContentCard() {
   const anchor = anchors[nearestIdx]
   const transition = transitionIdx >= 0 ? getTransitions(condition)[transitionIdx] : null
 
-  const isPcos = condition === 'pcos'
-
-  if (isPcos) {
-    const card = pcosCards[nearestIdx]
+  if (condition !== 'normal') {
+    const cond = conditions.find((c) => c.id === condition)
+    const card = conditionCards[condition]?.[anchor.id]
+    const normalProcess = normalProcessByAnchor[anchor.id]
+    const changeLabel = `${cond?.label ?? ''} Change`
 
     return (
       <div
@@ -70,20 +72,20 @@ export default function ContentCard() {
                 Normal Process
               </span>
               <p style={{ color: '#5a3040', fontSize: 14, lineHeight: '16.575px' }}>
-                {card.normalProcess}
+                {normalProcess}
               </p>
             </div>
 
-            {/* PCOS Change */}
+            {/* Condition Change */}
             <div>
               <span
                 className="inline-block font-semibold rounded-full px-2 py-0.5 mb-1"
                 style={{ background: '#F7CDD5', color: '#B94A62', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}
               >
-                PCOS Change
+                {changeLabel}
               </span>
               <p style={{ color: '#5a3040', fontSize: 14, lineHeight: '16.575px' }}>
-                {card.pcosChange}
+                {card?.conditionChange}
               </p>
             </div>
 
@@ -96,7 +98,7 @@ export default function ContentCard() {
               }}
             >
               <p className="font-semibold" style={{ color: '#8F2F46', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}>
-                ⭐ {card.keyResult}
+                ⭐ {card?.keyResult}
               </p>
             </div>
           </motion.div>

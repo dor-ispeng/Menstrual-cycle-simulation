@@ -19,11 +19,15 @@ const CANVAS_H = 1800
 // can derive canvas-space anatomy coordinates instead of re-hardcoding this.
 export const ANATOMY_GROUP_Y_OFFSET = 250
 
-// Normalisation denominators: peak values from normal-cycle keyframes
-const FSH_NORM  = 65
-const LH_NORM   = 95
-const EST_NORM  = 82
-const PROG_NORM = 80
+// Normalisation denominators: absolute scale (same 0–100 axis the hormone
+// graph plots on), not normal-cycle peaks. A peak-based denominator would
+// mean nothing could ever render as more intense than normal — any future
+// condition with a genuinely elevated hormone would clamp and become
+// indistinguishable from normal's peak.
+const FSH_NORM  = 100
+const LH_NORM   = 100
+const EST_NORM  = 100
+const PROG_NORM = 100
 
 // Half-width of the visual freeze zone around each anchor (progress units).
 // Anatomy, hormones, and particle visibility all clamp to the anchor state
@@ -110,6 +114,13 @@ export default function SimulationCanvas() {
   const estrogenLevel    = interpolateKeyframes(kf.estrogen,     anchorTs, heldProgress) / EST_NORM
   const progesteroneLevel= interpolateKeyframes(kf.progesterone, anchorTs, heldProgress) / PROG_NORM
 
+  // How much follicles actually GROW in response to FSH — separate from
+  // fshLevel itself, which still drives how bright the FSH glow reads. A
+  // condition can set follicleFshResponse below 1 to show a loud FSH signal
+  // reaching an ovary that can't respond to it (e.g. diminished reserve).
+  // All current conditions omit the field, so this equals fshLevel for them.
+  const follicleFshDrive = fshLevel * (cond.follicleFshResponse ?? 1)
+
   const nearestIdx  = nearestAnchorIndex(anchorTs, progress)
   const stageIndex  = activeTransitionIndex(anchorTs, progress)
   const isOnAnchor  = Math.abs((anchorTs[nearestIdx] ?? 0) - progress) <= ANCHOR_HOLD_RADIUS
@@ -182,12 +193,12 @@ export default function SimulationCanvas() {
 
   return (
     <div className="w-full h-full relative">
-      {condition === 'pcos' && (
+      {condition !== 'normal' && (
         <div
           className="absolute top-3 left-1/2 -translate-x-1/2 z-10 px-4 py-1 rounded-full font-semibold"
           style={{ background: 'var(--lavender-light)', color: 'var(--lavender)', border: '1px solid var(--lavender)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}
         >
-          PCOS pattern
+          {cond.label}
         </div>
       )}
 
@@ -280,6 +291,7 @@ export default function SimulationCanvas() {
                   eggProgress={eggProgress}
                   endometriumThickness={endometriumThickness}
                   fshLevel={fshLevel}
+                  follicleFshDrive={follicleFshDrive}
                   lhLevel={lhLevel}
                   progesteroneLevel={progesteroneLevel}
                   zoomLevel={zoomLevel}

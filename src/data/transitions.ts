@@ -195,6 +195,208 @@ export const pcosTransitions: Transition[] = [
   },
 ]
 
+// FHA transitions — same fromAnchorId/toAnchorId pairs and order as above.
+export const fhaTransitions: Transition[] = [
+  {
+    fromAnchorId: 'cycle-end',
+    toAnchorId: 'recruitment',
+    explanation:
+      'Hormone levels were already low, so there is no true withdrawal. GnRH pulses from the hypothalamus stay slow and infrequent, and FSH rises only slightly — too little to drive a cohort of follicles.',
+    brainEvents: ['GnRH pulse frequency reduced', 'FSH rising only weakly'],
+    beats: [
+      'Hormone levels were already low, so there is no withdrawal.',
+      'GnRH pulses from the hypothalamus stay slow and infrequent.',
+      'FSH rises only slightly — too little to drive a cohort.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'recruitment',
+    toAnchorId: 'competition',
+    explanation:
+      'A few follicles begin growing on minimal FSH, but stimulation is too weak to sustain their development, and growth slows almost as soon as it begins.',
+    brainEvents: ['Pituitary output remains low', 'LH stays below FSH'],
+    beats: [
+      'A few follicles begin growing on minimal FSH.',
+      'Stimulation is too weak to sustain their development.',
+      'Growth slows almost as soon as it begins.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'competition',
+    toAnchorId: 'dominant',
+    explanation:
+      'With so little FSH, no follicle gains an advantage. The cohort stalls at a small size, and no follicle is selected to lead the cycle.',
+    brainEvents: ['Estrogen feedback remains minimal', 'No rise in gonadotropins'],
+    beats: [
+      'With so little FSH, no follicle gains an advantage.',
+      'The cohort stalls at a small size.',
+      'No follicle is selected to lead the cycle.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'dominant',
+    toAnchorId: 'ovulation-decision',
+    explanation:
+      'Estrogen never rises above baseline, so the hypothalamus receives no signal to switch feedback. The conditions for an LH surge are never met.',
+    brainEvents: ['No positive feedback switch', 'LH remains flat and low'],
+    beats: [
+      'Estrogen never rises above baseline.',
+      'The hypothalamus receives no signal to switch feedback.',
+      'The conditions for an LH surge are never met.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'ovulation-decision',
+    toAnchorId: 'after-release',
+    explanation:
+      'No LH surge arrives to weaken the follicle wall. No follicle ruptures and no egg is released — the follicles simply remain where they are, and no corpus luteum forms.',
+    brainEvents: ['No LH surge', 'Progesterone stays at baseline'],
+    beats: [
+      'No LH surge arrives to weaken the follicle wall.',
+      'No follicle ruptures and no egg is released.',
+      'The follicles simply remain where they are.',
+      'No corpus luteum forms.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'after-release',
+    toAnchorId: 'preparation',
+    explanation:
+      'Without a corpus luteum, progesterone never rises. The lining receives neither estrogen nor progesterone support, and stays thin and underdeveloped.',
+    brainEvents: ['No progesterone feedback', 'Gonadotropins remain suppressed'],
+    beats: [
+      'Without a corpus luteum, progesterone never rises.',
+      'The lining receives neither estrogen nor progesterone support.',
+      'It stays thin and underdeveloped.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'preparation',
+    toAnchorId: 'continue-restart',
+    explanation:
+      'There is no thickened lining to shed. Menstruation is delayed or absent, and the cycle stays suppressed until signaling is restored.',
+    brainEvents: ['Hypothalamic signaling still reduced', 'No progesterone withdrawal'],
+    beats: [
+      'There is no thickened lining to shed.',
+      'Menstruation is delayed or absent.',
+      'The cycle stays suppressed until signaling is restored.',
+    ],
+    guidedDuration: 7,
+  },
+]
+
+// POI transitions — same fromAnchorId/toAnchorId pairs and order as above.
+export const poiTransitions: Transition[] = [
+  {
+    fromAnchorId: 'cycle-end',
+    toAnchorId: 'recruitment',
+    explanation:
+      'FSH is already high before the cycle even begins. The pituitary pushes harder against a depleted ovary, but only a few follicles remain to respond.',
+    brainEvents: ['FSH elevated at baseline', 'LH also raised'],
+    beats: [
+      'FSH is already high before the cycle even begins.',
+      'The pituitary pushes harder against a depleted ovary.',
+      'Only a few follicles remain to respond.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'recruitment',
+    toAnchorId: 'competition',
+    explanation:
+      'High FSH reaches only a small number of follicles, and those few respond weakly, if at all — there is no cohort large enough to compete.',
+    brainEvents: ['FSH remains elevated', 'Little estrogen returning to the brain'],
+    beats: [
+      'High FSH reaches only a small number of follicles.',
+      'Those few respond weakly, if at all.',
+      'There is no cohort large enough to compete.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'competition',
+    toAnchorId: 'dominant',
+    explanation:
+      'With so few follicles, no real competition takes place. None grows enough to pull ahead, and selection ends before it begins.',
+    brainEvents: ['Estrogen feedback stays weak', 'FSH stays high in response'],
+    beats: [
+      'With so few follicles, no real competition takes place.',
+      'None grows enough to pull ahead.',
+      'Selection ends before it begins.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'dominant',
+    toAnchorId: 'ovulation-decision',
+    explanation:
+      'No follicle matures, so estrogen stays low. The brain keeps raising FSH, but the ovary cannot answer, and the threshold for an LH surge is never reached.',
+    brainEvents: ['No positive feedback switch', 'Gonadotropins remain elevated'],
+    beats: [
+      'No follicle matures, so estrogen stays low.',
+      'The brain keeps raising FSH, but the ovary cannot answer.',
+      'The threshold for an LH surge is never reached.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'ovulation-decision',
+    toAnchorId: 'after-release',
+    explanation:
+      'No LH surge occurs, and no follicle is ready to rupture. No egg is released and no corpus luteum forms — FSH stays high throughout.',
+    brainEvents: ['No LH surge', 'Progesterone stays at baseline'],
+    beats: [
+      'No LH surge occurs, and no follicle is ready to rupture.',
+      'No egg is released.',
+      'No corpus luteum forms.',
+      'FSH stays high throughout.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'after-release',
+    toAnchorId: 'preparation',
+    explanation:
+      'Without a corpus luteum, progesterone never rises. Low estrogen leaves the lining thin, and the uterus is never prepared.',
+    brainEvents: ['No progesterone feedback', 'FSH still elevated'],
+    beats: [
+      'Without a corpus luteum, progesterone never rises.',
+      'Low estrogen leaves the lining thin.',
+      'The uterus is never prepared.',
+    ],
+    guidedDuration: 7,
+  },
+  {
+    fromAnchorId: 'preparation',
+    toAnchorId: 'continue-restart',
+    explanation:
+      'There is little lining to shed, so bleeding is irregular or absent. The next cycle begins with the same depleted reserve, though ovarian function can fluctuate.',
+    brainEvents: ['FSH remains elevated', 'No progesterone withdrawal'],
+    beats: [
+      'There is little lining to shed, so bleeding is irregular or absent.',
+      'The next cycle begins with the same depleted reserve.',
+      'Ovarian function can fluctuate — some cycles differ.',
+    ],
+    guidedDuration: 7,
+  },
+]
+
+// Exhaustive map — a condition added without a transitions entry is a
+// compile error here rather than silently falling back to normal-cycle
+// narration.
+const TRANSITIONS_BY_CONDITION: Record<ConditionId, Transition[]> = {
+  normal: transitions,
+  pcos: pcosTransitions,
+  'functional-hypothalamic-amenorrhea': fhaTransitions,
+  'primary-ovarian-insufficiency': poiTransitions,
+}
+
 export function getTransitions(condition: ConditionId): Transition[] {
-  return condition === 'pcos' ? pcosTransitions : transitions
+  return TRANSITIONS_BY_CONDITION[condition]
 }

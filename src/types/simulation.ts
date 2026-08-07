@@ -1,4 +1,8 @@
-export type ConditionId = 'normal' | 'pcos'
+export type ConditionId =
+  | 'normal'
+  | 'pcos'
+  | 'functional-hypothalamic-amenorrhea'
+  | 'primary-ovarian-insufficiency'
 
 export type HormoneKey = 'fsh' | 'lh' | 'estrogen' | 'progesterone'
 
@@ -60,9 +64,16 @@ export type ConditionKeyframes = {
 
 export type Condition = {
   id: ConditionId
-  label: string
+  label: string       // full name — canvas badge, context card
+  shortLabel: string   // compact name — nav dropdown
   description: string
   keyframes: ConditionKeyframes
   primaryHormoneByStage: StagePrimaryHormones
   secondaryDim: number
+  // How strongly follicles grow in response to FSH. Omitted = 1.0 (normal
+  // responsiveness). Lower values model an ovary that receives a strong FSH
+  // signal but cannot act on it — the FSH glow (driven by raw fshLevel) can
+  // stay bright while follicle growth (driven by fshLevel * this factor)
+  // stays suppressed.
+  follicleFshResponse?: number
 }

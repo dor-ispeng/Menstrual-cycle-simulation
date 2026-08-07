@@ -3,6 +3,8 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSimulationStore } from '@/store/simulation'
 import { structures } from '@/data/structures'
+import { conditionStructureContent } from '@/data/conditionStructures'
+import { conditions } from '@/data/conditions'
 import { anchors, anchorTs } from '@/data/anchors'
 import { nearestAnchorIndex } from '@/utils/interpolate'
 import { StructureContent } from '@/types/simulation'
@@ -26,15 +28,27 @@ function resolveContent(
 }
 
 export default function StructurePanel() {
-  const { selectedStructureId, setSelectedStructure, progress } = useSimulationStore()
+  const { selectedStructureId, setSelectedStructure, progress, condition } = useSimulationStore()
 
   const structure = structures.find((s) => s.id === selectedStructureId)
   const nearestIdx = nearestAnchorIndex(anchorTs, progress)
   const anchorId   = anchors[nearestIdx]!.id
 
-  const content = structure
-    ? resolveContent(structure.contextContent as Record<string, StructureContent | undefined>, anchorId)
+  // Condition-specific content is resolved FIRST, with its own backward-walk
+  // over only that condition's entries, before falling back to the
+  // normal-cycle content in structures.ts. Merging the two maps together and
+  // walking once would let a base-content entry from a LATER normal-cycle
+  // anchor leak into a gap inside the condition's own narrative — resolving
+  // condition content in isolation first avoids that.
+  const overrideMap = structure ? conditionStructureContent[condition]?.[structure.id] : undefined
+  const overrideContent = overrideMap
+    ? resolveContent(overrideMap as Record<string, StructureContent | undefined>, anchorId)
     : null
+  const content = structure
+    ? overrideContent ?? resolveContent(structure.contextContent as Record<string, StructureContent | undefined>, anchorId)
+    : null
+
+  const cond = conditions.find((c) => c.id === condition)
 
   return (
     <AnimatePresence>
@@ -64,12 +78,12 @@ export default function StructurePanel() {
           )}
 
           <p className="font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--accent)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}>
-            Structure
+            {overrideContent ? `Structure · ${cond?.shortLabel ?? ''}` : 'Structure'}
           </p>
 
           <AnimatePresence mode="wait">
             <motion.div
-              key={`${selectedStructureId}-${anchorId}`}
+              key={`${condition}-${selectedStructureId}-${anchorId}`}
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}

@@ -18,7 +18,7 @@ export const useSimulationStore = create<SimulationStore>((set) => ({
   progress: 0,
   condition: 'normal',
   selectedStructureId: null,
-  isHormoneGraphOpen: false,
+  isHormoneGraphOpen: true,
   isPlaying: false,
   setProgress: (p) => set({ progress: Math.max(0, Math.min(1, p)) }),
   setCondition: (c) => set({ condition: c, selectedStructureId: null }),

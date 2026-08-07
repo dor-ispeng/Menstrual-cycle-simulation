@@ -75,7 +75,7 @@ export default function Nav() {
                           }}
                           className={styles.modelDropdownItem}
                         >
-                          {c.label}
+                          {c.shortLabel}
                           {condition === c.id && <span className={styles.check}>✓</span>}
                         </button>
                       ))}
