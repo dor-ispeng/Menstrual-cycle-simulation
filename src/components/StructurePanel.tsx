@@ -6,8 +6,10 @@ import { structures } from '@/data/structures'
 import { conditionStructureContent } from '@/data/conditionStructures'
 import { conditions } from '@/data/conditions'
 import { anchors, anchorTs } from '@/data/anchors'
-import { nearestAnchorIndex } from '@/utils/interpolate'
+import { nearestAnchorIndex, interpolateKeyframes } from '@/utils/interpolate'
+import { FOLLICLE_COLLAPSE_END } from '@/components/AnatomyLayer'
 import { StructureContent } from '@/types/simulation'
+import { highlightHormones } from '@/utils/highlightHormones'
 
 // Anchor IDs in chronological order — used for fallback traversal.
 const ANCHOR_ORDER = anchors.map((a) => a.id)
@@ -30,7 +32,23 @@ function resolveContent(
 export default function StructurePanel() {
   const { selectedStructureId, setSelectedStructure, progress, condition } = useSimulationStore()
 
-  const structure = structures.find((s) => s.id === selectedStructureId)
+  const cond = conditions.find((c) => c.id === condition)
+
+  // The follicle and corpus luteum are rendered as one persistent on-canvas
+  // element that morphs from one into the other (see AnatomyLayer's
+  // "Persistent dominant structure" comment) — clicking it always selects
+  // whichever one is currently visible. Without this, dragging the timeline
+  // after selecting one leaves the card frozen on it even once it's no
+  // longer on screen. Re-resolve which of the two is actually current every
+  // render, the same way a click would, so the card keeps pace with the
+  // timeline instead of only updating on click.
+  const eggProgress = cond ? interpolateKeyframes(cond.keyframes.eggProgress, anchorTs, progress) : -1
+  const resolvedStructureId =
+    selectedStructureId === 'follicle' || selectedStructureId === 'corpus-luteum'
+      ? (eggProgress < FOLLICLE_COLLAPSE_END ? 'follicle' : 'corpus-luteum')
+      : selectedStructureId
+
+  const structure = structures.find((s) => s.id === resolvedStructureId)
   const nearestIdx = nearestAnchorIndex(anchorTs, progress)
   const anchorId   = anchors[nearestIdx]!.id
 
@@ -47,8 +65,6 @@ export default function StructurePanel() {
   const content = structure
     ? overrideContent ?? resolveContent(structure.contextContent as Record<string, StructureContent | undefined>, anchorId)
     : null
-
-  const cond = conditions.find((c) => c.id === condition)
 
   return (
     <AnimatePresence>
@@ -80,45 +96,49 @@ export default function StructurePanel() {
           <p className="font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--accent)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}>
             {overrideContent ? `Structure · ${cond?.shortLabel ?? ''}` : 'Structure'}
           </p>
+          {/* Plain keyed remount rather than AnimatePresence mode="wait": that
+              mode's exit/enter handoff reliably got stuck after its first
+              cycle here (confirmed by forcing selection changes directly —
+              the resolved structure updated correctly but the DOM never
+              re-rendered past the first swap), leaving stale content on
+              screen indefinitely. A full remount on key change is instant
+              and always correct; the motion.div's own initial→animate still
+              gives the new content a fade/slide-in. */}
+          <motion.div
+            key={`${condition}-${resolvedStructureId}-${anchorId}`}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18 }}
+          >
+            <h3 className="font-semibold mb-3" style={{ color: 'var(--site-heading-rose-dark)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 16, lineHeight: '17px' }}>
+              {content?.title ?? structure.name}
+            </h3>
 
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={`${condition}-${selectedStructureId}-${anchorId}`}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.18 }}
-            >
-              <h3 className="font-semibold mb-3" style={{ color: 'var(--site-heading-rose-dark)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 16, lineHeight: '17px' }}>
-                {content?.title ?? structure.name}
-              </h3>
-
-              {content ? (
-                <div className="space-y-3">
-                  <div>
-                    <p className="font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--lavender)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}>
-                      What&apos;s happening
-                    </p>
-                    <p style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: '16.575px' }}>
-                      {content.whatIsHappening}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--lavender)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}>
-                      Why it matters
-                    </p>
-                    <p style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: '16.575px' }}>
-                      {content.whyItMatters}
-                    </p>
-                  </div>
+            {content ? (
+              <div className="space-y-3">
+                <div>
+                  <p className="font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--lavender)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}>
+                    What&apos;s happening
+                  </p>
+                  <p style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: '16.575px' }}>
+                    {highlightHormones(content.whatIsHappening)}
+                  </p>
                 </div>
-              ) : (
-                <p style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: '16.575px' }}>
-                  {structure.shortDescription}
-                </p>
-              )}
-            </motion.div>
-          </AnimatePresence>
+                <div>
+                  <p className="font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--lavender)', fontFamily: 'var(--font-fredoka), sans-serif', fontSize: 14, lineHeight: '13.6px' }}>
+                    Why it matters
+                  </p>
+                  <p style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: '16.575px' }}>
+                    {highlightHormones(content.whyItMatters)}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: '16.575px' }}>
+                {structure.shortDescription}
+              </p>
+            )}
+          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>

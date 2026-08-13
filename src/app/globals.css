@@ -30,6 +30,18 @@
   --signal-lh:     #c96875;
   --signal-feed:   #e8954a;
 
+  /* Hormone-name text accents — darkened variants of the signal/particle
+     colours, for colouring hormone words in prose (see
+     src/utils/highlightHormones.tsx). NOT the same tokens as the particles/
+     graph lines above: those are chart-mark colours and fail WCAG AA as body
+     text (2.3–3.5:1 against the card backgrounds). These preserve each
+     colour's hue/saturation but reduce lightness to clear 4.5:1 minimum
+     against both card backgrounds. */
+  --hormone-fsh-text:          #6750aa;
+  --hormone-lh-text:           #a43b49;
+  --hormone-estrogen-text:     #ae5e16;
+  --hormone-progesterone-text: #366954;
+
   /* ---- Site design tokens (marketing pages: Home, Purpose, Model shell, Sources) ---- */
   /* Backgrounds */
   --site-bg:                #fdf1ef;

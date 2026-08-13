@@ -84,6 +84,12 @@ const TUBE_HIT_PATH =
 export const OVARY_DX = -18
 export const OVARY_DY = -118
 
+// eggProgress threshold where the persistent dominant-structure element
+// hands off from "follicle" to "corpus luteum" (see the collapse-window
+// comment below). Shared with StructurePanel so the selected-structure card
+// flips at the same instant the on-canvas structure does.
+export const FOLLICLE_COLLAPSE_END = 0.06
+
 // Bezier-approximated ellipse (rx=185, ry=150, Bézier factor ≈ 0.5523)
 // Centred at (830,630) so the right edge sits at x≈1015, giving a clear
 // anatomical gap to the fimbriae opening at (1089,498). Actual on-screen
@@ -280,14 +286,17 @@ function sampleTube(frac: number): Pt2 {
 // Fraction of eggProgress (0–1) used for the follicle→fimbriae approach
 const T_APPROACH = 0.18
 
-function eggPosition(t: number): Pt2 {
+function eggPosition(t: number, domX: number, domY: number): Pt2 {
   if (t <= T_APPROACH) {
     const frac = t / T_APPROACH
-    // dominant follicle is at FOLLICLE_POSITIONS[DOMINANT_IDX] = (845, 615),
-    // shifted by the ovary-group offset (OVARY_DX, OVARY_DY) since EggGroup
-    // sits outside that wrapper. Approaching the fimbriae opening at (1089, 498).
-    const startX = 845 + OVARY_DX
-    const startY = 615 + OVARY_DY
+    // dominant follicle position is passed in (positions[DOMINANT_IDX] at
+    // the call site) rather than hardcoded, so this follows a condition's
+    // folliclePositions override (e.g. PCOS's ring) instead of always
+    // assuming the default (845, 615). Shifted by the ovary-group offset
+    // (OVARY_DX, OVARY_DY) since EggGroup sits outside that wrapper.
+    // Approaching the fimbriae opening at (1089, 498).
+    const startX = domX + OVARY_DX
+    const startY = domY + OVARY_DY
     return [startX + (1089 - startX) * frac, startY + (498 - startY) * frac]
   }
   return sampleTube((t - T_APPROACH) / (1 - T_APPROACH))
@@ -307,6 +316,9 @@ type Props = {
   progesteroneLevel: number       // 0–1 — drives endometrium secretory response
   zoomLevel?: number
   onStructureClick: (id: string) => void
+  // Condition-specific override for follicle placement (e.g. PCOS's
+  // peripheral ring). Omitted = the default FOLLICLE_POSITIONS scatter.
+  folliclePositions?: readonly (readonly [number, number])[]
 }
 
 
@@ -345,7 +357,15 @@ export default function AnatomyLayer({
   progesteroneLevel,
   zoomLevel = 1,
   onStructureClick,
+  folliclePositions,
 }: Props) {
+  // Resolved once per render: every follicle-position read in this component
+  // goes through `positions`, never the FOLLICLE_POSITIONS module constant
+  // directly, so a condition's override (or its absence) is applied
+  // consistently everywhere — the dominant-slot lookup, both follicle render
+  // maps, and the FSH glow that tracks them.
+  const positions = folliclePositions ?? FOLLICLE_POSITIONS
+
   // Secretory-phase tint: progesterone transforms the lining from merely
   // "thick" (estrogen-driven proliferation) into glandular, nutrient-rich
   // tissue. Below ~0.3 (PCOS never crosses this — its progesterone stays
@@ -412,7 +432,7 @@ export default function AnatomyLayer({
   // The follicle fades out across that window while corp1 fades in over
   // 0 → 0.10, so corp1 emerges *from* the collapsing follicle rather than
   // popping in. corp1 peaks ~0.12, then morphs on to corp2 by After Release.
-  const COLLAPSE_END    = 0.06
+  const COLLAPSE_END    = FOLLICLE_COLLAPSE_END
   const follicleFadeOut = Math.min(1, Math.max(0, 1 - eggProgress / COLLAPSE_END)) // 1 at eP≤0 → 0 at eP≥0.06
   const corp1FadeIn     = Math.min(1, Math.max(0, eggProgress / 0.10))             // 0 at eP=0 → 1 at eP≥0.10
   const follicleVisible = eggProgress < COLLAPSE_END
@@ -451,7 +471,7 @@ export default function AnatomyLayer({
   // Pre-ovulation it sits at the follicle centre (eggPosition(0) === centre).
   const eggVisible = eggProgress >= 0 || isPreOvulation   // always: in the follicle, then up the tube
 
-  const [domFX, domFY] = FOLLICLE_POSITIONS[DOMINANT_IDX]
+  const [domFX, domFY] = positions[DOMINANT_IDX]
 
   return (
     <g>
@@ -572,7 +592,7 @@ export default function AnatomyLayer({
       */}
       {fshLevel > 0.10 && (
         <g id="FSHGlowGroup" style={{ pointerEvents: 'none' }}>
-          {FOLLICLE_POSITIONS.map(([fx, fy], i) => {
+          {positions.map(([fx, fy], i) => {
             if (i === DOMINANT_IDX) {
               if (!isPreOvulation || dominantFollicleRadius < 0.06) return null
               const gr = structR + 7
@@ -622,7 +642,7 @@ export default function AnatomyLayer({
           lock-step as the follicle grows or regresses — giving a continuous
           biological transformation rather than a swap between two images.
         */}
-        {FOLLICLE_POSITIONS.map(([fx, fy], i) => {
+        {positions.map(([fx, fy], i) => {
           if (i === DOMINANT_IDX) return null  // dominant handled separately below
 
           const fraction = Math.min(1, Math.max(0, smallFollicleCount - i))
@@ -1114,7 +1134,7 @@ export default function AnatomyLayer({
         <path d={EGG_GUIDE_D} fill="none" stroke="none" visibility="hidden" />
 
         {eggVisible && (() => {
-          const [ex, ey] = eggPosition(Math.max(0, eggProgress))
+          const [ex, ey] = eggPosition(Math.max(0, eggProgress), domFX, domFY)
           const eggS = 15 / 280
           return (
             <motion.g

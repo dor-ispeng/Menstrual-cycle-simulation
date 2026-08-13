@@ -12,6 +12,7 @@ import { anchorTs, anchors } from '@/data/anchors'
 import { interpolateKeyframes, activeTransitionIndex, nearestAnchorIndex } from '@/utils/interpolate'
 import { getTransitions } from '@/data/transitions'
 import type { Transition } from '@/types/simulation'
+import { highlightHormones } from '@/utils/highlightHormones'
 
 const COLORS = {
   FSH: '#9a8ac8',
@@ -204,7 +205,7 @@ export default function HormoneGraph() {
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.3 }}
               >
-                {beatText}
+                {highlightHormones(beatText)}
               </motion.p>
             </AnimatePresence>
           </motion.div>
@@ -246,7 +247,7 @@ export default function HormoneGraph() {
             <ul className="space-y-0.5">
               {manualTransition.brainEvents.map((ev, i) => (
                 <li key={i} style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: '16.575px' }}>
-                  • {ev}
+                  • {highlightHormones(ev)}
                 </li>
               ))}
             </ul>

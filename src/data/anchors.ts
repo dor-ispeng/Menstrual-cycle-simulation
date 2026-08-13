@@ -52,3 +52,21 @@ export const anchors: Anchor[] = [
 ]
 
 export const anchorTs = anchors.map((a) => a.t)
+
+// Two-phase clinical model of the normal (ovulatory) cycle: the follicular
+// phase runs from Day 1 through ovulation, and the luteal phase runs from
+// ovulation through the next Day 1. Only meaningful for the normal cycle —
+// anovulatory conditions (PCOS, FHA, POI) never complete a luteal phase, so
+// this is intentionally not used for their cards.
+export type CyclePhase = 'follicular' | 'luteal'
+
+export const phaseByAnchor: Record<string, CyclePhase> = {
+  'cycle-end': 'follicular',
+  'recruitment': 'follicular',
+  'competition': 'follicular',
+  'dominant': 'follicular',
+  'ovulation-decision': 'follicular',
+  'after-release': 'luteal',
+  'preparation': 'luteal',
+  'continue-restart': 'luteal',
+}

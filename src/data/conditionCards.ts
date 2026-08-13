@@ -74,7 +74,7 @@ export const conditionCards: Partial<Record<ConditionId, Record<string, Conditio
   'functional-hypothalamic-amenorrhea': {
     'cycle-end': {
       conditionChange:
-        'Hormone levels were already low, so there is no withdrawal to trigger bleeding. The lining is thin and the ovary is quiet, though structurally normal.',
+        'Hormone levels are low, often due to too little food, too much exercise, or high stress — so there is no withdrawal to trigger bleeding. The lining is thin and the ovary is quiet, though structurally normal.',
       keyResult: 'The cycle begins with reduced signaling from the brain.',
     },
     'recruitment': {
@@ -115,7 +115,7 @@ export const conditionCards: Partial<Record<ConditionId, Record<string, Conditio
   'primary-ovarian-insufficiency': {
     'cycle-end': {
       conditionChange:
-        'Few follicles remain in the ovary, and FSH is already elevated as the brain pushes for a response. Bleeding may be irregular or absent, and the lining is thin.',
+        'Few follicles remain in the ovary, and FSH is already elevated as the brain pushes for a response. POI is defined by the ovary losing normal function before age 40, so bleeding may be irregular or absent, and the lining is thin.',
       keyResult: 'The cycle begins with a diminished ovarian reserve.',
     },
     'recruitment': {

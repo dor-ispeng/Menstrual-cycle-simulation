@@ -90,7 +90,15 @@ function computeInitialX(ww: number): number {
 }
 
 export default function SimulationCanvas() {
-  const { progress, condition, setSelectedStructure } = useSimulationStore()
+  const { progress, condition, setSelectedStructure, isPlaying, selectedStructureId } = useSimulationStore()
+
+  // Guided playback already freezes progress advancement while a structure
+  // card is open (see HormoneGraph's tick loop) — this makes the hormone
+  // particles freeze in place too, since their flight loops are otherwise
+  // driven independently of `progress` and would keep flying through the
+  // pause. Scoped to guided playback only: manual scrubbing + a clicked
+  // structure isn't "paused" in the same sense, so particles keep flying.
+  const particlesFrozen = isPlaying && selectedStructureId !== null
   const transformRef = useRef<ReactZoomPanPinchRef>(null)
   const [zoomLevel, setZoomLevel] = useState(1)
 
@@ -296,6 +304,7 @@ export default function SimulationCanvas() {
                   progesteroneLevel={progesteroneLevel}
                   zoomLevel={zoomLevel}
                   onStructureClick={setSelectedStructure}
+                  folliclePositions={cond.folliclePositions}
                 />
               </g>
 
@@ -311,6 +320,7 @@ export default function SimulationCanvas() {
                 primaryHormoneByStage={cond.primaryHormoneByStage}
                 secondaryDim={cond.secondaryDim}
                 onStructureClick={setSelectedStructure}
+                isFrozen={particlesFrozen}
               />
             </svg>
           </div>

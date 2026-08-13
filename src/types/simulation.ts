@@ -76,4 +76,10 @@ export type Condition = {
   // stay bright while follicle growth (driven by fshLevel * this factor)
   // stays suppressed.
   follicleFshResponse?: number
+  // Overrides AnatomyLayer's default central-scatter follicle layout with a
+  // condition-specific one (e.g. PCOS's peripheral "string of pearls" ring).
+  // Must have exactly 12 entries — same length/index meaning as the default
+  // FOLLICLE_POSITIONS (index 0 is the persistent dominant candidate slot,
+  // 1–11 are recruited follicles). Omitted = the default layout.
+  folliclePositions?: readonly (readonly [number, number])[]
 }

@@ -1,5 +1,6 @@
 .scallop {
   height: 22px;
+  background-color: var(--site-bg-section-light);
   background-image: radial-gradient(circle at 13.2px 0, transparent 13.2px, var(--site-surface-filled) 14.3px);
   background-size: 26.4px 22px;
   background-repeat: repeat-x;
@@ -28,6 +29,7 @@
 .body {
   max-width: 900px;
   margin: 0 auto;
+  font-family: var(--font-quicksand), sans-serif;
   font-size: 13px;
   line-height: 1.55;
   color: var(--site-heading-rose);

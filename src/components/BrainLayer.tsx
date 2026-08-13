@@ -1,9 +1,11 @@
 'use client'
 
-import { useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useMemo, useRef } from 'react'
+import { motion, useAnimate } from 'framer-motion'
+import type { AnimationPlaybackControlsWithThen } from 'framer-motion'
 import type { HormoneKey, StagePrimaryHormones } from '@/types/simulation'
 import { OVARY_DX, OVARY_DY } from './AnatomyLayer'
+import { clamp } from '@/utils/interpolate'
 
 // ── Brain geometry ─────────────────────────────────────────────────────────────
 // Brain structures sit near the very top of the canvas (y ≈ 0–112).
@@ -167,12 +169,14 @@ type HormoneParticleProps = {
   hiliteColor: string      // specular tint — the hormone's own lightened color
   shadowColor: string      // shadow tint — the hormone's dark companion color
   isOnAnchor: boolean
+  isFrozen: boolean        // guided playback paused on a clicked structure — hold
+                            // the particle exactly where it is, mid-flight
 }
 
 function HormoneParticle({
   p, opacity, duration, ease, peakOpacity,
   bodyGradient, glowGradient, glowRadiusMult = 1.6,
-  variantIndex, hiliteColor, shadowColor, isOnAnchor,
+  variantIndex, hiliteColor, shadowColor, isOnAnchor, isFrozen,
 }: HormoneParticleProps) {
   const v = PARTICLE_VARIANTS[variantIndex % PARTICLE_VARIANTS.length]
   // The repeating flight-path animate/transition objects must be
@@ -197,16 +201,62 @@ function HormoneParticle({
     [p, v, variantIndex],
   )
 
+  // The flight loop is driven imperatively so it can be genuinely PAUSED —
+  // not restarted, not skipped — when isFrozen flips true. A declarative
+  // `animate={false}` looks like it should do this but doesn't: framer-motion
+  // treats a boolean `animate` prop as "nothing to animate here" and skips
+  // the element's animation processing entirely (see the `typeof prop ===
+  // "boolean"` early-continue in its animateChanges loop), leaving the
+  // already-running Infinity-repeat loop completely untouched. The
+  // AnimationPlaybackControls returned by useAnimate's imperative animate()
+  // call has real .pause()/.play(), which hold and resume from the exact
+  // current position — what "freeze mid-flight" actually needs. (These run on
+  // framer-motion's own JS ticker, not WAAPI — the multi-keyframe `times`
+  // table below isn't WAAPI-eligible, so Element.getAnimations() stays empty.)
+  const [scope, animateImperative] = useAnimate<SVGGElement>()
+  const controlsRef = useRef<AnimationPlaybackControlsWithThen | null>(null)
+
+  // Start the loop exactly once, on mount. flightAnimate/flightTransition
+  // are memoized on values that never change for a mounted particle (see
+  // comment above) — they're a one-time animation definition, not reactive
+  // inputs — so capturing them in this mount-only effect is safe.
+  useEffect(() => {
+    controlsRef.current = animateImperative(scope.current, flightAnimate, flightTransition)
+    if (isFrozen) controlsRef.current.pause()
+    return () => controlsRef.current?.stop()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // .pause() holds the animation at its current position; .play() resumes
+  // from there. Neither restarts the keyframe sequence from the top.
+  useEffect(() => {
+    if (isFrozen) controlsRef.current?.pause()
+    else controlsRef.current?.play()
+  }, [isFrozen])
+
   return (
     <motion.g
       initial={{ opacity: 0 }}
       animate={{ opacity }}
       transition={{ duration: 0.7 }}
     >
-      <motion.g
-        initial={{ x: p.sx, y: p.sy, opacity: 0 }}
-        animate={flightAnimate}
-        transition={flightTransition}
+      {/* Plain <g>, not motion.g — its animation is driven entirely by the
+          imperative controls above. Both values below are only the
+          pre-animation default (avoiding a first-frame flash) and are
+          superseded once the mount effect's animateImperative() call starts.
+
+          `opacity` MUST be the SVG presentation attribute here, not an inline
+          style. On SVG elements framer-motion's imperative animate() writes
+          opacity via setAttribute, and an inline `style="opacity:…"` outranks
+          a presentation attribute in the CSS cascade — so a style-based
+          default would pin every particle at its initial value forever and
+          silently hide them all, even while the animation ran correctly
+          underneath. Position is the mirror image: framer writes
+          style.transform, which correctly outranks this transform attribute. */}
+      <g
+        ref={scope}
+        transform={`translate(${p.sx}, ${p.sy})`}
+        opacity={0}
       >
         {/* Rim glow — sits ~8% brighter than the body so a distinct edge
             reads at a glance; disappears at anchors so it doesn't distract
@@ -236,7 +286,7 @@ function HormoneParticle({
             lightened shade of the hormone's own color (not plain white);
             position/size/shape all cycle per variant */}
         <path d={hilitePath} fill={hiliteColor} opacity={0.5} />
-      </motion.g>
+      </g>
     </motion.g>
   )
 }
@@ -254,6 +304,7 @@ type Props = {
   primaryHormoneByStage:  StagePrimaryHormones
   secondaryDim:           number
   onStructureClick?:      (id: string) => void
+  isFrozen?:              boolean  // guided playback paused on a clicked structure
 }
 
 export default function BrainLayer({
@@ -263,13 +314,30 @@ export default function BrainLayer({
   primaryHormoneByStage,
   secondaryDim,
   onStructureClick,
+  isFrozen = false,
 }: Props) {
   const primary: HormoneKey = primaryHormoneByStage[stageIndex] ?? primaryHormoneByStage[0]
 
   const fshScale  = primary === 'fsh'          ? 1.0 : secondaryDim
-  const lhScale   = primary === 'lh'           ? 1.0 : secondaryDim
   const estScale  = primary === 'estrogen'     ? 1.0 : secondaryDim
   const progScale = primary === 'progesterone' ? 1.0 : secondaryDim
+
+  // LH earns its own emphasis once it's genuinely surging, independent of
+  // which hormone the current stage spotlights. Without this, LH stays
+  // dimmed to secondaryDim through the entire run-up to ovulation (that
+  // stage spotlights estrogen instead — sustained estrogen is what triggers
+  // the surge, and that's the stage's teaching point) and only lights up
+  // once the NEXT stage begins — i.e. right as LH is already falling, after
+  // the egg has released. That reads as "LH peaks after ovulation," backwards
+  // from reality. Bounds are tuned, not arbitrary: PCOS (0.35–0.52) and POI
+  // (0.44–0.52) run elevated-but-flat and must never cross secondaryDim
+  // (0.45) here — at their peak (0.52) this yields surgeT≈0.40, safely
+  // below. FHA (0.07–0.09) never approaches the lower bound at all. Normal's
+  // climb (0.22→0.95 through the dominant→ovulation-decision stage) crosses
+  // the lower bound well before the Ovulation Decision anchor, so the surge
+  // now visibly builds beforehand instead of only lighting up afterward.
+  const surgeT  = clamp((lhLevel - 0.40) / 0.30, 0, 1)
+  const lhScale = Math.max(primary === 'lh' ? 1.0 : secondaryDim, surgeT)
 
   // Estrogen source blending
   const focus     = Math.max(dominantFollicleRadius, corpusLuteumRadius)
@@ -434,7 +502,7 @@ export default function BrainLayer({
             duration={4.5} ease="easeIn" peakOpacity={0.88}
             bodyGradient="hormoneBodyFsh" glowGradient="hormoneGlowFsh"
             variantIndex={i} hiliteColor={C_FSH_HILITE} shadowColor={C_FSH_DARK}
-            isOnAnchor={isOnAnchor} />
+            isOnAnchor={isOnAnchor} isFrozen={isFrozen} />
         ))}
 
         {/* ── LH particles: pituitary → dominant follicle (focused) ────────── */}
@@ -448,7 +516,7 @@ export default function BrainLayer({
             bodyGradient="hormoneBodyLh" glowGradient="hormoneGlowLh"
             glowRadiusMult={1.35}
             variantIndex={i} hiliteColor={C_LH_HILITE} shadowColor={C_LH_DARK}
-            isOnAnchor={isOnAnchor} />
+            isOnAnchor={isOnAnchor} isFrozen={isFrozen} />
         ))}
 
         {/* ── Estrogen from multiple follicles (early cycle) ──────────────── */}
@@ -458,7 +526,7 @@ export default function BrainLayer({
             duration={4.5} ease="easeOut" peakOpacity={0.80}
             bodyGradient="hormoneBodyEst" glowGradient="hormoneGlowEst"
             variantIndex={i} hiliteColor={C_EST_HILITE} shadowColor={C_EST_DARK}
-            isOnAnchor={isOnAnchor} />
+            isOnAnchor={isOnAnchor} isFrozen={isFrozen} />
         ))}
 
         {/* ── Estrogen from dominant follicle / CL ─────────────────────────── */}
@@ -468,7 +536,7 @@ export default function BrainLayer({
             duration={4.5} ease="easeOut" peakOpacity={0.84}
             bodyGradient="hormoneBodyEst" glowGradient="hormoneGlowEst"
             variantIndex={i + 1} hiliteColor={C_EST_HILITE} shadowColor={C_EST_DARK}
-            isOnAnchor={isOnAnchor} />
+            isOnAnchor={isOnAnchor} isFrozen={isFrozen} />
         ))}
 
         {/* ── Progesterone from CL → hypothalamus ──────────────────────────── */}
@@ -478,7 +546,7 @@ export default function BrainLayer({
             duration={4.8} ease="easeOut" peakOpacity={0.84}
             bodyGradient="hormoneBodyProg" glowGradient="hormoneGlowProg"
             variantIndex={i} hiliteColor={C_PROG_HILITE} shadowColor={C_PROG_DARK}
-            isOnAnchor={isOnAnchor} />
+            isOnAnchor={isOnAnchor} isFrozen={isFrozen} />
         ))}
 
       </motion.g>

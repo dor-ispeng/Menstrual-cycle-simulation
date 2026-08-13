@@ -31,13 +31,13 @@ export const normalCondition: Condition = {
 
 export const pcosCondition: Condition = {
   id: 'pcos',
-  label: 'PCOS',
+  label: 'Polycystic Ovary Syndrome',
   shortLabel: 'PCOS',
   description:
     'One common PCOS pattern: elevated LH, arrested follicular development, and absent ovulation. PCOS is heterogeneous — this is a simplified representation.',
   keyframes: {
     // Many small follicles throughout; no dominant follicle selected
-    smallFollicleCount:     [5, 9, 12, 12, 12, 11, 10, 9],
+    smallFollicleCount:     [7, 9, 12, 12, 12, 11, 10, 9],
     dominantFollicleRadius: [0, 0, 0,  0,  0,  0,  0,  0],
     corpusLuteumRadius:     [0, 0, 0,  0,  0,  0,  0,  0],
     eggProgress:            [-1, -1, -1, -1, -1, -1, -1, -1],
@@ -56,6 +56,50 @@ export const pcosCondition: Condition = {
   // normal's non-primary hormones, so "elevated but flat" reads clearly.
   primaryHormoneByStage: ['fsh', 'fsh', 'estrogen', 'estrogen', 'estrogen', 'estrogen', 'fsh'],
   secondaryDim: 0.45,
+  // Peripheral "string of pearls" ring — the classic PCOS ultrasound
+  // appearance — instead of the default central scatter. 12 points spaced
+  // evenly by ARC LENGTH (not angle — the ellipse is wider than it is tall,
+  // so equal angle steps bunch points near the left/right ends) around an
+  // ellipse (rx=135, ry=75) centered at (830, 625), with light per-point
+  // jitter so it doesn't read as mechanically perfect.
+  //
+  // Sized against the RENDERED ovary.png silhouette (via a distance
+  // transform of its alpha channel, mapped through the OVARY_ART_* placement
+  // constants in AnatomyLayer) — NOT against OVARY_PATH. OVARY_PATH is only
+  // the invisible click hit-shape (an ellipse at (830,630), rx=185, ry=150)
+  // and is a meaningfully different, TALLER shape than the actual art (whose
+  // real silhouette is closer to rx≈219, ry≈120 around (788,623)). An
+  // earlier version of this ring was sized against OVARY_PATH and visibly
+  // overflowed the art top and bottom as a result. Do not use OVARY_PATH for
+  // visual placement of anything — it exists purely for hit-testing.
+  //
+  // Verified against PCOS's actual rendered follicle size, not the generic
+  // RECRUITED_R=27 max: PCOS's fsh keyframes peak at 42, so
+  // follicleFshDrive maxes at 0.42, giving a follicle body radius of
+  // ~22.4 — but the per-follicle FSH glow ring (AnatomyLayer's
+  // FSHGlowGroup) draws at `targetR * fraction + 5`, effectively ~27.4, so
+  // that's the number that matters for clearance. Minimum clearance from any
+  // ring point to the rendered ovary edge: +17.8 against the follicle body,
+  // +13.4 against the glow. Minimum center-to-center spacing between
+  // neighbors: 52.5 (bodies are r≈23, so they stay ~7px apart — no overlap).
+  //
+  // Index 0 keeps its usual meaning (the dominant-candidate slot) and is the
+  // slot the egg renders in/from (see AnatomyLayer's eggPosition, which
+  // reads this array's index 0 rather than a hardcoded position specifically
+  // so it follows this override). It's safe to place on the ring for PCOS:
+  // dominantFollicleRadius and corpusLuteumRadius are 0 throughout, so that
+  // slot only ever renders as a resting BASE_R (18) follicle, never a
+  // dominant follicle or corpus luteum. eggProgress is -1 at every PCOS
+  // anchor, but the egg itself IS still visible there (eggVisible is
+  // `eggProgress >= 0 || isPreOvulation`, and isPreOvulation is
+  // `eggProgress < 0` — so it's always true); it just sits at rest in this
+  // slot rather than traveling anywhere, which is correct for an
+  // anovulatory condition.
+  folliclePositions: [
+    [964, 625], [937, 671], [886, 693], [830, 699],
+    [773, 692], [724, 669], [694, 625], [724, 579],
+    [776, 558], [830, 549], [887, 558], [937, 580],
+  ],
 }
 
 export const functionalHypothalamicAmenorrheaCondition: Condition = {

@@ -21,6 +21,16 @@ export default function TimelineBar() {
   }, [setProgress])
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
+    // Without this, mousedown starts a native text selection that tracks the
+    // cursor for the rest of the drag — since the move/up listeners below are
+    // on `window` (so the drag keeps working even once the cursor leaves the
+    // track), that selection sweeps across whatever page text the cursor
+    // crosses, not just the track itself. preventDefault stops the selection
+    // from starting; the body-level user-select toggle below is what stops
+    // it for elements outside the track specifically.
+    e.preventDefault()
+    document.body.style.userSelect = 'none'
+
     setIsPlaying(false)   // cancel guided playback the moment the user grabs the timeline
     getProgressFromEvent(e.clientX)
 
@@ -38,12 +48,25 @@ export default function TimelineBar() {
           setProgress(nearest.t)
         }
       }
+      cleanup()
+    }
+
+    // Releasing the mouse button outside the browser window entirely (over
+    // another app) never fires `mouseup` here, which would otherwise leave
+    // the page permanently unselectable. Window blur is the closest
+    // available proxy for "the drag session is over" in that case.
+    const onBlur = () => cleanup()
+
+    function cleanup() {
+      document.body.style.userSelect = ''
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('blur', onBlur)
     }
 
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
+    window.addEventListener('blur', onBlur)
   }, [getProgressFromEvent, setProgress, setIsPlaying])
 
   const currentAnchor = anchors.reduce((best, a) =>
@@ -73,7 +96,7 @@ export default function TimelineBar() {
         ref={trackRef}
         onMouseDown={onMouseDown}
         className="relative h-2 rounded-full cursor-pointer"
-        style={{ background: 'var(--border)' }}
+        style={{ background: 'var(--border)', userSelect: 'none', WebkitUserSelect: 'none' }}
       >
         {/* Fill */}
         <div
