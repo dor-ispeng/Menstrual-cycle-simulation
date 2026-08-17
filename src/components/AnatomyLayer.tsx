@@ -20,6 +20,22 @@ const UTERUS_ART_X = -213
 const UTERUS_ART_Y = -88
 const UTERUS_ART_W = 1548
 const UTERUS_ART_H = 1096
+const UTERUS_ART_SCALE_X = UTERUS_ART_W / UTERUS_ART_NATIVE_W
+const UTERUS_ART_SCALE_Y = UTERUS_ART_H / UTERUS_ART_NATIVE_H
+
+// The endometrium's transform MUST be built as a SINGLE template literal —
+// see the <g> that uses UTERUS_ART_SCALE_* below. It was previously written as
+// two template literals joined with `+`:
+//     `translate(${X}, ${Y}) ` + `scale(${SX}, ${SY})`
+// which is correct source but miscompiled under Next 16.2.9's production
+// minifier (Turbopack). Because both interpolations constant-fold, the
+// minifier joined the two folded strings and DROPPED the first one's trailing
+// `) `, emitting `translate(-213, -88scale(1.038…, 1.038…)`. That is not valid
+// transform syntax, so browsers discard the WHOLE attribute — the group's
+// transformList parses to 0 items — and the endometrium renders at raw
+// unscaled native coordinates instead of on top of the uterus artwork. It
+// only reproduced in a production build; dev is unminified and looked fine.
+// Do not reintroduce string concatenation here.
 
 // ── Shared ovary-artwork placement box ───────────────────────────────────────
 // Same idea as above, for public/ovary.png — single source of truth for the
@@ -1086,10 +1102,7 @@ export default function AnatomyLayer({
             so it's placed with the EXACT SAME box (translate + the scale that
             box implies) — no independent offset or separate scaleX/scaleY. */}
         <g
-          transform={
-            `translate(${UTERUS_ART_X}, ${UTERUS_ART_Y}) ` +
-            `scale(${UTERUS_ART_W / UTERUS_ART_NATIVE_W}, ${UTERUS_ART_H / UTERUS_ART_NATIVE_H})`
-          }
+          transform={`translate(${UTERUS_ART_X}, ${UTERUS_ART_Y}) scale(${UTERUS_ART_SCALE_X}, ${UTERUS_ART_SCALE_Y})`}
           style={{ cursor: 'pointer' }}
           onClick={() => onStructureClick('endometrium')}
         >
