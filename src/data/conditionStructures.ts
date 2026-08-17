@@ -25,7 +25,7 @@ export const conditionStructureContent: Partial<
       'recruitment': {
         title: 'Brain and Pituitary',
         whatIsHappening:
-          'GnRH pulses are rapid, which favours LH release over FSH. The pituitary puts out relatively little FSH.',
+          'GnRH pulses are rapid, which favors LH release over FSH. The pituitary puts out relatively little FSH.',
         whyItMatters:
           'Reduced FSH means the follicle cohort never gets a strong enough growth signal.',
       },
@@ -57,7 +57,7 @@ export const conditionStructureContent: Partial<
       'preparation': {
         title: 'Brain and Pituitary',
         whatIsHappening: 'Without progesterone, GnRH pulses stay rapid and LH remains elevated.',
-        whyItMatters: 'The rapid pulse pattern that favours LH over FSH is self-sustaining.',
+        whyItMatters: 'The rapid pulse pattern that favors LH over FSH is self-sustaining.',
       },
       'continue-restart': {
         title: 'Brain and Pituitary',
@@ -126,7 +126,7 @@ export const conditionStructureContent: Partial<
       'recruitment': {
         title: 'Small Follicles',
         whatIsHappening: 'A new cohort begins growing, but the available FSH is limited.',
-        whyItMatters: 'Weak FSH support means none will be strongly favoured.',
+        whyItMatters: 'Weak FSH support means none will be strongly favored.',
       },
       'competition': {
         title: 'Arrested Follicles',
@@ -317,7 +317,7 @@ export const conditionStructureContent: Partial<
       'competition': {
         title: 'Brain and Pituitary',
         whatIsHappening: 'Pituitary output stays low. There is no rise in FSH to drive the cohort forward.',
-        whyItMatters: 'The brain is not responding to the ovary — it is simply not signalling.',
+        whyItMatters: 'The brain is not responding to the ovary — it is simply not signaling.',
       },
       'dominant': {
         title: 'Brain and Pituitary',
@@ -344,7 +344,7 @@ export const conditionStructureContent: Partial<
       'continue-restart': {
         title: 'Brain and Pituitary',
         whatIsHappening:
-          'Signalling stays suppressed. It can recover when energy availability, stress, or training load improve.',
+          'Signaling stays suppressed. It can recover when energy availability, stress, or training load improve.',
         whyItMatters:
           'FHA is typically reversible — the reproductive axis is intact and waiting for conditions to change.',
       },
@@ -371,7 +371,7 @@ export const conditionStructureContent: Partial<
       'dominant': {
         title: 'Ovary',
         whatIsHappening: 'No follicle is selected, because none received enough support to pull ahead.',
-        whyItMatters: 'This is a signalling failure, not an ovarian one.',
+        whyItMatters: 'This is a signaling failure, not an ovarian one.',
       },
       'ovulation-decision': {
         title: 'Ovary',
@@ -391,7 +391,7 @@ export const conditionStructureContent: Partial<
       'continue-restart': {
         title: 'Ovary',
         whatIsHappening: 'The follicle reserve is unchanged and remains ready to respond.',
-        whyItMatters: 'When signalling returns, the ovary can resume normal cycles.',
+        whyItMatters: 'When signaling returns, the ovary can resume normal cycles.',
       },
     },
 
@@ -467,7 +467,7 @@ export const conditionStructureContent: Partial<
       'continue-restart': {
         title: 'Egg (Not Released)',
         whatIsHappening: 'The egg was not released this cycle.',
-        whyItMatters: 'Ovulation typically resumes once hypothalamic signalling recovers.',
+        whyItMatters: 'Ovulation typically resumes once hypothalamic signaling recovers.',
       },
     },
 
@@ -629,7 +629,7 @@ export const conditionStructureContent: Partial<
       },
       'continue-restart': {
         title: 'Brain and Pituitary',
-        whatIsHappening: 'The brain enters the next cycle still signalling strongly.',
+        whatIsHappening: 'The brain enters the next cycle still signaling strongly.',
         whyItMatters: 'Ovarian function in POI can fluctuate — some cycles may respond better than others.',
       },
     },

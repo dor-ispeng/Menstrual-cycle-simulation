@@ -48,7 +48,7 @@ export default function HomeFreedomGuidance() {
               margin: 0,
             }}
           >
-            Drag the timeline slider &amp; learn at your own individualistic pace
+            Drag the timeline slider &amp; move through the cycle at your own pace
           </p>
         </div>
 
@@ -100,7 +100,7 @@ export default function HomeFreedomGuidance() {
               margin: 0,
             }}
           >
-            Use the &quot;What Happens Next&quot; button for structured guidance
+            Use the &quot;What Happens Next?&quot; button for structured guidance
           </p>
         </div>
       </div>

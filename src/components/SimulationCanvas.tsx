@@ -54,9 +54,49 @@ const ANATOMY_MID_Y = (ANATOMY_TOP_Y + ANATOMY_BOT_Y) / 2   // = 720
 
 // Padding visible beyond the scene edges at the pan limits
 const PAN_PAD_ABOVE_BRAIN    = 80   // px of empty space above brain when panned all the way up
-const PAN_PAD_BELOW_ANATOMY  = 250  // px of empty space below anatomy when panned all the way down
+const PAN_PAD_BELOW_ANATOMY  = 320  // px of empty space below anatomy when panned all the way down —
+                                     // large enough to hold the KEY NOTE plate (see below) with margin
+                                     // beneath it before the hard pan limit
 
 void BRAIN_BOT_Y  // referenced indirectly via BRAIN_TOP_Y/PAN_PAD_ABOVE_BRAIN
+
+// ── Key note (below the anatomy) ─────────────────────────────────────────────
+// Mirrors Footer.tsx's "KEY NOTE" disclaimer, but the model page renders no
+// Footer — this is the ONLY disclaimer on the model page, reachable by
+// dragging the canvas down past the anatomy. Lives inside the pannable SVG
+// (not a fixed overlay) so it's discovered by exploring, matching the rest of
+// the canvas's show-don't-tell design. No background plate, by design — the
+// text sits directly on the canvas, widened into 4 longer lines rather than
+// the original 5 short ones.
+//
+// Line width is capped well short of what the canvas itself could fit,
+// because HormoneGraph's panel is a FIXED screen-space overlay (not part of
+// the pannable SVG) sitting at the right edge of the viewport. At a 1280px
+// viewport its left edge lands at canvas x≈996 — centered text wider than
+// ~550px starts running under it. 4 lines at ~70 chars keeps every line
+// under that on common desktop widths; going to 3 longer lines (as first
+// tried) measured ~660px and clipped visibly under the panel.
+//
+// Flat white on this band's worst-case backdrop (base rect #e3a3a8 composited
+// with all three overlapping bgShadowEdge ellipses, ≈rgb(186,121,129)) measures
+// ≈3.4:1 — under the 4.5:1 body-text minimum, since there's no opaque plate
+// (or stroked halo — deliberately removed) to lean on. Plain white was the
+// explicit ask over the contrast-safer alternatives; flagging the number
+// here rather than silently making that trade.
+const KEYNOTE_CENTER_X     = 700
+const KEYNOTE_LABEL_Y      = 1235
+const KEYNOTE_BODY_FIRST_Y = 1266
+const KEYNOTE_BODY_LINE_H  = 26
+
+const KEYNOTE_TEXT_COLOR   = '#ffffff'
+
+// Hand-broken so no line is a stub — SVG <text> doesn't wrap on its own.
+const KEYNOTE_BODY_LINES = [
+  'This is not a diagnostic tool — it is solely for education and empowerment.',
+  'If you have personal health concerns, please consult a professional',
+  'medical provider. The visuals above are simplified and may not be',
+  'anatomically precise; hormone levels and cycle timing vary between individuals.',
+]
 
 // ── Camera bounds (posY space) ───────────────────────────────────────────────
 // posY = CSS translateY on the content div.
@@ -116,6 +156,8 @@ export default function SimulationCanvas() {
   const corpusLuteumR        = interpolateKeyframes(kf.corpusLuteumRadius,     anchorTs, heldProgress)
   const eggProgress          = interpolateKeyframes(kf.eggProgress,            anchorTs, heldProgress)
   const endometriumThickness = interpolateKeyframes(kf.endometriumThickness,   anchorTs, heldProgress)
+
+  const brainActivityLevel = interpolateKeyframes(kf.brainActivity, anchorTs, heldProgress)
 
   const fshLevel         = interpolateKeyframes(kf.fsh,          anchorTs, heldProgress) / FSH_NORM
   const lhLevel          = interpolateKeyframes(kf.lh,           anchorTs, heldProgress) / LH_NORM
@@ -289,6 +331,40 @@ export default function SimulationCanvas() {
               <ellipse cx={700} cy={700} rx={620} ry={480} fill="url(#bgGlowAnatomy)" />
               <ellipse cx={980} cy={580} rx={320} ry={260} fill="url(#bgGlowAnatomy)" />
 
+              {/* Key note — the model page's only disclaimer, see the constants'
+                  comments above for why it's plain white text with no
+                  background plate. pointerEvents none so a drag starting
+                  here still pans the canvas instead of being swallowed by
+                  text. */}
+              <g style={{ pointerEvents: 'none' }}>
+                <text
+                  x={KEYNOTE_CENTER_X}
+                  y={KEYNOTE_LABEL_Y}
+                  textAnchor="middle"
+                  fontFamily="var(--font-fredoka), sans-serif"
+                  fontWeight={600}
+                  fontSize={14}
+                  letterSpacing="0.3px"
+                  fill={KEYNOTE_TEXT_COLOR}
+                >
+                  KEY NOTE
+                </text>
+                <text
+                  x={KEYNOTE_CENTER_X}
+                  y={KEYNOTE_BODY_FIRST_Y}
+                  textAnchor="middle"
+                  fontFamily="var(--font-quicksand), sans-serif"
+                  fontSize={15}
+                  fill={KEYNOTE_TEXT_COLOR}
+                >
+                  {KEYNOTE_BODY_LINES.map((line, i) => (
+                    <tspan key={i} x={KEYNOTE_CENTER_X} dy={i === 0 ? 0 : KEYNOTE_BODY_LINE_H}>
+                      {line}
+                    </tspan>
+                  ))}
+                </text>
+              </g>
+
               {/* Anatomy group: shifts all AnatomyLayer elements so uterus top
                   lands at canvas y=315 and bottom at y=1125. */}
               <g transform={`translate(0, ${ANATOMY_GROUP_Y_OFFSET})`}>
@@ -313,12 +389,17 @@ export default function SimulationCanvas() {
                 lhLevel={lhLevel}
                 estrogenLevel={estrogenLevel}
                 progesteroneLevel={progesteroneLevel}
+                brainActivity={brainActivityLevel}
                 dominantFollicleRadius={dominantFollicleR}
                 corpusLuteumRadius={corpusLuteumR}
+                smallFollicleCount={smallFollicleCount}
                 stageIndex={stageIndex}
                 isOnAnchor={isOnAnchor}
                 primaryHormoneByStage={cond.primaryHormoneByStage}
                 secondaryDim={cond.secondaryDim}
+                folliclePositions={cond.folliclePositions}
+                fshTargetIndices={cond.fshTargetIndices}
+                conditionId={cond.id}
                 onStructureClick={setSelectedStructure}
                 isFrozen={particlesFrozen}
               />

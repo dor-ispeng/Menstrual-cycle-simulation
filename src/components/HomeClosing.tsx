@@ -21,8 +21,8 @@ export default function HomeClosing() {
         }}
       >
         The menstrual cycle, or period, is a natural biological process that reflects overall
-        health and development. It&apos;s one of the bodies way of signaling vitality, but it can
-        also bring physical and emotional challenges worth understanding and addressing
+        health and development. It&apos;s one of the body&apos;s ways of signaling vitality, but it
+        can also bring physical and emotional challenges worth understanding and addressing
         holistically.
       </p>
     </section>

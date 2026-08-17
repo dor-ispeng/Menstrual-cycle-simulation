@@ -117,7 +117,10 @@ const OVARY_PATH =
 // original right/lower-right scatter position onto what was index 8's old
 // (then-unused) left-side coordinates; index 8 has since been moved off that
 // same spot to its own unused slot to avoid the resulting overlap.
-const FOLLICLE_POSITIONS: [number, number][] = [
+// Exported so BrainLayer can derive its FSH particle endpoints from the same
+// list instead of hand-typed coordinates that can (and did) silently drift
+// out of sync with where the follicles are actually drawn.
+export const FOLLICLE_POSITIONS: [number, number][] = [
   [845, 615],  // [0] dominant candidate — grows with dominantFollicleRadius
   [790, 545], [845, 540], [920, 555],  // upper scatter
   [960, 615], [750, 620], [880, 700],  // [5] moved to the left side (was [940,670])
@@ -125,9 +128,9 @@ const FOLLICLE_POSITIONS: [number, number][] = [
   [810, 595], [905, 595], [850, 670],  // inner scatter (unused)
 ]
 
-const DOMINANT_IDX = 0   // index of the persistent dominant candidate
+export const DOMINANT_IDX = 0   // index of the persistent dominant candidate
 const BASE_R       = 18  // resting radius — matches the follic1.svg "cycle-end" scale
-const RECRUITED_R  = 27  // radius once FSH drives recruitment — matches follic2.svg scale
+export const RECRUITED_R = 27  // radius once FSH drives recruitment — matches follic2.svg scale
 const MAX_DOM_R    = 72  // peak dominant follicle radius (~28 % smaller than before)
 const CL_PEAK_R    = 62  // corpus luteum at maturity (slightly less than max follicle)
 
@@ -221,9 +224,12 @@ const FOLLICLE_SHADE_OPACITY: Record<number, number> = {
 // Pre-sampled once at module load. No DOM or ref needed.
 //
 // The egg follows: dominant follicle (845,615)
-//   → fimbriae opening (1089,498)   [linear approach, T_APPROACH fraction]
+//   → fimbriae opening (1098,470)   [linear approach, T_APPROACH fraction]
 //   → along reversed tube beziers   [arc-length parameterized]
-//   → uterine junction (514,390)
+//   → uterine cavity (420,395), between the endometrial linings, closer to
+//     the right wall — verified against the rasterized endometrium artwork
+//     (see endometrium.ts) rather than eyeballed. The path's final segment
+//     (rev seg1 below) crosses from the cornu into the cavity proper.
 
 type Pt2 = [number, number]
 
@@ -235,21 +241,32 @@ function evalCubic(u: number, p0: Pt2, p1: Pt2, p2: Pt2, p3: Pt2): Pt2 {
   ]
 }
 
-// Reversed fallopian tube segments (fimbriae opening → uterine junction).
+// Reversed fallopian tube segments (fimbriae opening → uterine cavity).
 // Each entry reverses one segment of TUBE_PATH: swap P0↔P3, swap P1↔P2.
+// Control points below are NOT the tube's visual centerline — they were
+// solved against the rasterized artwork to minimize the egg disc (15px
+// radius) hanging off-image, since a centerline-only fit still let the egg's
+// edge clip transparent pixels at the fimbrial gaps and along the funnel.
+// The 5th segment is new: the original path ended at (514,390), which sits
+// outside the endometrium entirely (59px past the right lining's inner edge,
+// 13px past its OUTER edge — resting in the myometrium). It now continues
+// through the cornu into the cavity proper, ending between the three
+// endometrium sub-paths, biased toward the right lining.
 const EGG_TUBE_SEGS: [Pt2, Pt2, Pt2, Pt2][] = [
-  [[1089,498], [1120,460], [1150,380], [1160,280]],  // rev seg4
-  [[1160,280], [1170,140], [1120,118], [1044,114]],  // rev seg3
-  [[1044,114], [950,110],  [820,150],  [722,188]],   // rev seg2
-  [[722,188],  [650,230],  [580,320],  [514,390]],   // rev seg1
+  [[1098,470], [1110,420], [1160,340], [1160,280]],  // rev seg5 — fimbrial pickup
+  [[1160,280], [1170,140], [1120,118], [1044,114]],  // rev seg4
+  [[1044,114], [950,110],  [820,150],  [722,188]],   // rev seg3
+  [[722,188],  [620,200],  [545,260],  [520,335]],   // rev seg2 — funnel → cornu
+  [[520,335],  [492,352],  [455,375],  [420,395]],   // rev seg1 — into the cavity
 ]
 
 // d attribute for the invisible SVG guide path (matches EGG_TUBE_SEGS)
 const EGG_GUIDE_D =
-  'M 1089,498 C 1120,460 1150,380 1160,280 ' +
+  'M 1098,470 C 1110,420 1160,340 1160,280 ' +
   'C 1170,140 1120,118 1044,114 ' +
   'C 950,110 820,150 722,188 ' +
-  'C 650,230 580,320 514,390'
+  'C 620,200 545,260 520,335 ' +
+  'C 492,352 455,375 420,395'
 
 // Build arc-length table — 25 uniform samples per segment
 const _N = 25
@@ -259,7 +276,7 @@ for (const [p0, p1, p2, p3] of EGG_TUBE_SEGS) {
     _tubePts.push(evalCubic(k / _N, p0, p1, p2, p3))
   }
 }
-_tubePts.push([514, 390])
+_tubePts.push([420, 395])
 
 const _arcs: number[] = [0]
 for (let i = 1; i < _tubePts.length; i++) {
@@ -294,10 +311,11 @@ function eggPosition(t: number, domX: number, domY: number): Pt2 {
     // folliclePositions override (e.g. PCOS's ring) instead of always
     // assuming the default (845, 615). Shifted by the ovary-group offset
     // (OVARY_DX, OVARY_DY) since EggGroup sits outside that wrapper.
-    // Approaching the fimbriae opening at (1089, 498).
+    // Approaching the fimbriae opening at (1098, 470) — matches EGG_TUBE_SEGS'
+    // first segment start.
     const startX = domX + OVARY_DX
     const startY = domY + OVARY_DY
-    return [startX + (1089 - startX) * frac, startY + (498 - startY) * frac]
+    return [startX + (1098 - startX) * frac, startY + (470 - startY) * frac]
   }
   return sampleTube((t - T_APPROACH) / (1 - T_APPROACH))
 }
@@ -1100,32 +1118,6 @@ export default function AnatomyLayer({
           style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
           onClick={handleTubeClick}
         />
-
-        {/* Label — fundus (top wall) of the uterus */}
-        <text
-          x="300" y="140"
-          textAnchor="middle"
-          fontSize="21"
-          fill="#f5cdd4"
-          fontFamily="var(--font-fredoka), sans-serif"
-          opacity={0.70}
-          style={{ pointerEvents: 'none', userSelect: 'none' }}
-        >
-          Uterus
-        </text>
-
-        {/* Label — sits in the upper section of the tube arc */}
-        <text
-          x="950" y="95"
-          textAnchor="middle"
-          fontSize="19"
-          fill="#f5cdd4"
-          fontFamily="var(--font-fredoka), sans-serif"
-          opacity={0.80}
-          style={{ pointerEvents: 'none', userSelect: 'none' }}
-        >
-          Fallopian tube
-        </text>
       </g>
 
       {/* ── EggGroup ──────────────────────────────────────────────────────── */}

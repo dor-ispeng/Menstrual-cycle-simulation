@@ -112,7 +112,7 @@ export const pcosTransitions: Transition[] = [
       'FSH rises into an ovary that still holds arrested follicles.',
       'A new cohort begins growing alongside the old ones.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'recruitment',
@@ -125,7 +125,7 @@ export const pcosTransitions: Transition[] = [
       'Excess androgen blunts each follicle\'s response to FSH.',
       'Estrogen stays too low to reshape the cohort.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'competition',
@@ -138,7 +138,7 @@ export const pcosTransitions: Transition[] = [
       'The cohort arrests at a similar, small size.',
       'Selection fails — there is no dominant follicle.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'dominant',
@@ -151,7 +151,7 @@ export const pcosTransitions: Transition[] = [
       'The hypothalamus stays in negative feedback.',
       'No LH surge is triggered.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'ovulation-decision',
@@ -165,7 +165,7 @@ export const pcosTransitions: Transition[] = [
       'The arrested follicles remain in the ovary.',
       'No corpus luteum forms.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'after-release',
@@ -178,7 +178,7 @@ export const pcosTransitions: Transition[] = [
       'The lining continues under unopposed estrogen.',
       'It thickens but never becomes secretory.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'preparation',
@@ -191,7 +191,7 @@ export const pcosTransitions: Transition[] = [
       'Bleeding becomes irregular, delayed, or absent.',
       'The next cycle begins with the same arrested follicles.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
 ]
 
@@ -208,7 +208,7 @@ export const fhaTransitions: Transition[] = [
       'GnRH pulses from the hypothalamus stay slow and infrequent.',
       'FSH rises only slightly — too little to drive a cohort.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'recruitment',
@@ -221,7 +221,7 @@ export const fhaTransitions: Transition[] = [
       'Stimulation is too weak to sustain their development.',
       'Growth slows almost as soon as it begins.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'competition',
@@ -234,7 +234,7 @@ export const fhaTransitions: Transition[] = [
       'The cohort stalls at a small size.',
       'No follicle is selected to lead the cycle.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'dominant',
@@ -247,7 +247,7 @@ export const fhaTransitions: Transition[] = [
       'The hypothalamus receives no signal to switch feedback.',
       'The conditions for an LH surge are never met.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'ovulation-decision',
@@ -261,7 +261,7 @@ export const fhaTransitions: Transition[] = [
       'The follicles simply remain where they are.',
       'No corpus luteum forms.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'after-release',
@@ -274,7 +274,7 @@ export const fhaTransitions: Transition[] = [
       'The lining receives neither estrogen nor progesterone support.',
       'It stays thin and underdeveloped.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'preparation',
@@ -287,7 +287,7 @@ export const fhaTransitions: Transition[] = [
       'Menstruation is delayed or absent.',
       'The cycle stays suppressed until signaling is restored.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
 ]
 
@@ -304,7 +304,7 @@ export const poiTransitions: Transition[] = [
       'The pituitary pushes harder against a depleted ovary.',
       'Only a few follicles remain to respond.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'recruitment',
@@ -317,7 +317,7 @@ export const poiTransitions: Transition[] = [
       'Those few respond weakly, if at all.',
       'There is no cohort large enough to compete.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'competition',
@@ -330,7 +330,7 @@ export const poiTransitions: Transition[] = [
       'None grows enough to pull ahead.',
       'Selection ends before it begins.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'dominant',
@@ -343,7 +343,7 @@ export const poiTransitions: Transition[] = [
       'The brain keeps raising FSH, but the ovary cannot answer.',
       'The threshold for an LH surge is never reached.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'ovulation-decision',
@@ -357,7 +357,7 @@ export const poiTransitions: Transition[] = [
       'No corpus luteum forms.',
       'FSH stays high throughout.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'after-release',
@@ -370,7 +370,7 @@ export const poiTransitions: Transition[] = [
       'Low estrogen leaves the lining thin.',
       'The uterus is never prepared.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
   {
     fromAnchorId: 'preparation',
@@ -383,7 +383,7 @@ export const poiTransitions: Transition[] = [
       'The next cycle begins with the same depleted reserve.',
       'Ovarian function can fluctuate — some cycles differ.',
     ],
-    guidedDuration: 7,
+    guidedDuration: 8,
   },
 ]
 

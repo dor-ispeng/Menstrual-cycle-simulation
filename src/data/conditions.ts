@@ -43,7 +43,19 @@ export const pcosCondition: Condition = {
     eggProgress:            [-1, -1, -1, -1, -1, -1, -1, -1],
     // Endometrium thickens due to unopposed estrogen but no secretory transformation
     endometriumThickness:   [0.1, 0.3, 0.5, 0.62, 0.65, 0.65, 0.68, 0.55],
-    brainActivity:          [0.3, 0.5, 0.4, 0.35, 0.35, 0.3,  0.3,  0.3],
+    // HIGH and FLAT. brainActivity drives GnRH pulse FREQUENCY (see
+    // BrainLayer's activityToInterval), and persistently rapid GnRH pulses are
+    // the defining upstream mechanism of PCOS — rapid pulses preferentially
+    // drive LH synthesis over FSH, which is what produces the elevated LH:FSH
+    // ratio plotted in the hormone graph above. This condition's own copy says
+    // so in three places ("GnRH pulses are rapid", "stay rapid", "the rapid
+    // pulse pattern ... is self-sustaining"), so the animation must agree.
+    // Flat because there is no progesterone to slow pulses in a luteal phase
+    // that never happens — the pattern is self-sustaining, exactly as the copy
+    // states. Kept below normal's 0.95 ovulatory peak: PCOS is persistently
+    // rapid, but the peri-ovulatory surge is still the single fastest moment
+    // in a normal cycle.
+    brainActivity:          [0.74, 0.76, 0.76, 0.75, 0.75, 0.74, 0.74, 0.74],
     // Elevated LH:FSH ratio; no midcycle LH surge
     fsh:                    [22, 42, 30, 24, 24, 12, 12, 22],
     lh:                     [35, 48, 50, 52, 50, 45, 40, 38],
@@ -100,6 +112,14 @@ export const pcosCondition: Condition = {
     [773, 692], [724, 669], [694, 625], [724, 579],
     [776, 558], [830, 549], [887, 558], [937, 580],
   ],
+  // BrainLayer's 6 FSH particles default to targeting ring indices [0..5],
+  // which for this ring layout are 6 consecutive points along the bottom
+  // arc — every visible particle would bunch on one side. Spread across
+  // alternating indices instead so particles fan around the full ring, and
+  // deliberately skip index 0: it's the dominant-candidate slot, and with
+  // dominantFollicleRadius pinned at 0 for this condition it should never
+  // receive an FSH particle of its own.
+  fshTargetIndices: [1, 3, 5, 7, 9, 11],
 }
 
 export const functionalHypothalamicAmenorrheaCondition: Condition = {

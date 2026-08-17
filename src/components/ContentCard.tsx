@@ -47,7 +47,20 @@ export default function ContentCard() {
         }}
       >
         {/* Stage label */}
-        <AnimatePresence mode="wait">
+        {/* initial={false}: this whole condition-card branch only mounts
+            fresh when switching AWAY from Normal — Normal and the condition
+            card are structurally different JSX (the early return above), so
+            React remounts this subtree rather than updating it in place.
+            That remount's very first enter tween (opacity 0→1) could end up
+            never completing — landing the card permanently stuck invisible
+            at its initial opacity:0 with fully-populated but invisible text,
+            rather than a visibly blank/empty card. initial={false} skips
+            animating the FIRST appearance entirely (content just shows,
+            already at its animate state) while leaving exit/enter animation
+            intact for later anchor-to-anchor changes within a condition,
+            which aren't affected by this since they update in place rather
+            than remounting. */}
+        <AnimatePresence mode="wait" initial={false}>
           <motion.p
             key={anchor.id + '-label'}
             className="font-bold uppercase tracking-wider mb-2"
@@ -61,7 +74,7 @@ export default function ContentCard() {
           </motion.p>
         </AnimatePresence>
 
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={anchor.id}
             initial={{ opacity: 0, y: 6 }}

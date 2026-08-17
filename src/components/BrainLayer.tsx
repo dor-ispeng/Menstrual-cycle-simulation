@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { motion, useAnimate } from 'framer-motion'
 import type { AnimationPlaybackControlsWithThen } from 'framer-motion'
 import type { HormoneKey, StagePrimaryHormones } from '@/types/simulation'
-import { OVARY_DX, OVARY_DY } from './AnatomyLayer'
+import { OVARY_DX, OVARY_DY, FOLLICLE_POSITIONS, DOMINANT_IDX } from './AnatomyLayer'
 import { clamp } from '@/utils/interpolate'
 
 // ── Brain geometry ─────────────────────────────────────────────────────────────
@@ -54,46 +54,151 @@ type Pt = { sx: number; sy: number; ex: number; ey: number; r: number; delay: nu
 // unaffected and left as-is.
 
 // FSH: 6 particles fanning toward the follicle ring from the pituitary.
-const FSH_PTS: Pt[] = [
-  { sx: WIN_CX, sy: EMIT_Y, ex: 702 + OVARY_DX, ey: 885 + OVARY_DY, r: 10, delay: 0.0 },
-  { sx: WIN_CX, sy: EMIT_Y, ex: 732 + OVARY_DX, ey: 948 + OVARY_DY, r:  9, delay: 1.0 },
-  { sx: WIN_CX, sy: EMIT_Y, ex: 850 + OVARY_DX, ey: 770 + OVARY_DY, r: 11, delay: 2.0 },
-  { sx: WIN_CX, sy: EMIT_Y, ex: 845 + OVARY_DX, ey: 865 + OVARY_DY, r: 10, delay: 0.4 },
-  { sx: WIN_CX, sy: EMIT_Y, ex: 948 + OVARY_DX, ey: 833 + OVARY_DY, r:  9, delay: 3.0 },
-  { sx: WIN_CX, sy: EMIT_Y, ex: 920 + OVARY_DX, ey: 956 + OVARY_DY, r:  9, delay: 4.0 },
-]
+//
+// Endpoints are DERIVED from FOLLICLE_POSITIONS (AnatomyLayer's actual
+// follicle layout) rather than hand-typed, because hand-typed coordinates
+// silently drifted out of sync with where follicles are actually drawn — 4 of
+// the previous 6 endpoints landed 34–50px from the nearest follicle (radius
+// 27px), i.e. in empty ovary stroma.
+//
+// Must match SimulationCanvas's exported ANATOMY_GROUP_Y_OFFSET (250). Not
+// imported directly — SimulationCanvas imports BrainLayer, so importing back
+// would be circular. Every other follicle-side particle endpoint below
+// (EST_MULTI_PTS, EST_DOM_PTS, PROG_PTS) already bakes this same +250 into
+// its hardcoded sy literal; this constant just makes that assumption
+// explicit for the derived FSH endpoints instead of hiding it in arithmetic.
+const ANATOMY_GROUP_Y = 250
 
-// LH: 4 particles converging on the dominant follicle.
-const LH_PTS: Pt[] = [
-  { sx: WIN_CX, sy: EMIT_Y, ex: 834 + OVARY_DX, ey: 808 + OVARY_DY, r: 13, delay: 0.0 },
-  { sx: WIN_CX, sy: EMIT_Y, ex: 845 + OVARY_DX, ey: 810 + OVARY_DY, r: 12, delay: 0.6 },
-  { sx: WIN_CX, sy: EMIT_Y, ex: 838 + OVARY_DX, ey: 810 + OVARY_DY, r: 11, delay: 1.2 },
-  { sx: WIN_CX, sy: EMIT_Y, ex: 851 + OVARY_DX, ey: 805 + OVARY_DY, r: 10, delay: 1.8 },
-]
+// particle i (array position, 0–5) targets FOLLICLE_POSITIONS/
+// folliclePositions index DEFAULT_FSH_TARGETS[i] — the natural i→i mapping.
+// A condition with a non-scatter layout (e.g. PCOS's ring) can override which
+// follicle each particle targets via Condition.fshTargetIndices.
+const DEFAULT_FSH_TARGETS = [0, 1, 2, 3, 4, 5] as const
 
-// Estrogen from multiple follicles (early cycle). Base sy = local y + 250.
-const EST_MULTI_PTS: Pt[] = [
-  { sx: 800 + OVARY_DX, sy: 785 + OVARY_DY, ex: 686, ey: ARRIVE_Y, r: 10, delay: 0.0 },
-  { sx: 905 + OVARY_DX, sy: 788 + OVARY_DY, ex: 703, ey: ARRIVE_Y, r:  9, delay: 1.1 },
-  { sx: 948 + OVARY_DX, sy: 833 + OVARY_DY, ex: 710, ey: ARRIVE_Y, r:  9, delay: 2.2 },
-  { sx: 732 + OVARY_DX, sy: 948 + OVARY_DY, ex: 694, ey: ARRIVE_Y, r:  9, delay: 3.3 },
+// Deterministic per-particle offset (NOT Math.random — must stay stable
+// across re-renders, or particles would visibly jump every frame) so each
+// FSH particle lands NEAR its target follicle's centre rather than exactly
+// on it — reads as plausible biological scatter instead of a laser-precise
+// hit. Magnitude ~0.35 × RECRUITED_R (27px) ≈ 9px, comfortably inside even
+// the smallest (BASE_R=18) follicle body.
+const FSH_JITTER: readonly [number, number][] = [
+  [-8, 5], [7, -8], [-6, -9], [9, 6], [-9, 4], [6, 9],
 ]
+const FSH_DELAYS = [0.0, 1.0, 2.0, 0.4, 3.0, 4.0] as const
+const FSH_RADII  = [10, 9, 11, 10, 9, 9] as const
 
-// Estrogen from dominant follicle / CL (late cycle). Base (845, 865) =
-// local (845, 615) + 250 — the dominant follicle's position.
-const EST_DOM_PTS: Pt[] = [
-  { sx: 845 + OVARY_DX, sy: 865 + OVARY_DY, ex: 700, ey: ARRIVE_Y, r: 10, delay: 0.0 },
-  { sx: 845 + OVARY_DX, sy: 865 + OVARY_DY, ex: 690, ey: ARRIVE_Y, r:  9, delay: 0.9 },
-  { sx: 845 + OVARY_DX, sy: 865 + OVARY_DY, ex: 710, ey: ARRIVE_Y, r: 10, delay: 1.8 },
-]
+function buildFshPoints(
+  folliclePositions: readonly (readonly [number, number])[],
+  targetIndices: readonly number[],
+): Pt[] {
+  return targetIndices.map((targetIdx, i) => {
+    const pos = folliclePositions[targetIdx] ?? folliclePositions[DOMINANT_IDX]!
+    const [fx, fy] = pos
+    const [jx, jy] = FSH_JITTER[i % FSH_JITTER.length]!
+    return {
+      sx: WIN_CX, sy: EMIT_Y,
+      ex: fx + jx + OVARY_DX,
+      ey: fy + jy + OVARY_DY + ANATOMY_GROUP_Y,
+      r: FSH_RADII[i % FSH_RADII.length]!,
+      delay: FSH_DELAYS[i % FSH_DELAYS.length]!,
+    }
+  })
+}
 
-// Progesterone from CL — broader spread than estrogen. Same base as EST_DOM_PTS.
-const PROG_PTS: Pt[] = [
-  { sx: 845 + OVARY_DX, sy: 865 + OVARY_DY, ex: 700, ey: ARRIVE_Y, r: 11, delay: 0.0 },
-  { sx: 845 + OVARY_DX, sy: 865 + OVARY_DY, ex: 682, ey: ARRIVE_Y, r:  9, delay: 1.0 },
-  { sx: 845 + OVARY_DX, sy: 865 + OVARY_DY, ex: 718, ey: ARRIVE_Y, r: 10, delay: 2.0 },
-  { sx: 845 + OVARY_DX, sy: 865 + OVARY_DY, ex: 700, ey: ARRIVE_Y, r:  9, delay: 3.0 },
+// Every remaining follicle-side endpoint below is derived from the same
+// `folliclePositions` list for exactly the reason the FSH endpoints are: the
+// hand-typed originals had drifted out of registration with where follicles
+// are actually drawn. Measured before this change, against the default
+// scatter: the 4 estrogen source points sat 14–47px from the nearest follicle
+// centre (radius 27), and all 4 LH endpoints clustered 55–60px ABOVE the
+// dominant follicle's centre — inside the body only because MAX_DOM_R is 72,
+// with their glow spilling past the rim. That LH offset is a fossil of an
+// earlier, ~28% larger dominant follicle (see MAX_DOM_R's own comment in
+// AnatomyLayer): the follicle was shrunk and these endpoints were never
+// brought along with it.
+
+// LH acts on the dominant follicle, so all 4 endpoints resolve to the
+// dominant slot with a small deterministic spread — a tight converging
+// cluster on the structure that actually ruptures. The spread is kept small
+// relative to BASE_R (18) so the cluster still reads as "on the follicle"
+// even in conditions where the dominant slot never grows past its resting
+// size (PCOS/POI, where dominantFollicleRadius is pinned at 0).
+const LH_SPREAD: readonly [number, number][] = [
+  [-9, -4], [4, 6], [-3, 7], [8, -5],
 ]
+const LH_DELAYS = [0.0, 0.6, 1.2, 1.8] as const
+const LH_RADII  = [13, 12, 11, 10] as const
+
+function buildLhPoints(
+  folliclePositions: readonly (readonly [number, number])[],
+): Pt[] {
+  const [dx, dy] = folliclePositions[DOMINANT_IDX] ?? [845, 615]
+  return LH_SPREAD.map(([jx, jy], i) => ({
+    sx: WIN_CX, sy: EMIT_Y,
+    ex: dx + jx + OVARY_DX,
+    ey: dy + jy + OVARY_DY + ANATOMY_GROUP_Y,
+    r: LH_RADII[i]!,
+    delay: LH_DELAYS[i]!,
+  }))
+}
+
+// Estrogen from the wider cohort (early cycle) — these flow ovary → brain, so
+// the FOLLICLE is the source (sx/sy) and the hypothalamus is the destination.
+// Targets reuse the condition's own FSH target list minus the dominant slot:
+// the follicles making estrogen are precisely the ones FSH is stimulating
+// (FSH drives granulosa aromatase), so sharing the list is biologically
+// principled rather than merely convenient — and it means a condition that
+// relocates its follicles (PCOS's ring) relocates its estrogen sources too.
+const EST_MULTI_ARRIVE_X = [686, 703, 710, 694] as const
+const EST_MULTI_SPREAD: readonly [number, number][] = [
+  [6, -7], [-8, 5], [7, 8], [-5, -8],
+]
+const EST_MULTI_DELAYS = [0.0, 1.1, 2.2, 3.3] as const
+const EST_MULTI_RADII  = [10, 9, 9, 9] as const
+
+function buildEstMultiPoints(
+  folliclePositions: readonly (readonly [number, number])[],
+  cohortIndices: readonly number[],
+): Pt[] {
+  return EST_MULTI_ARRIVE_X.map((arriveX, i) => {
+    const targetIdx = cohortIndices[i % Math.max(1, cohortIndices.length)] ?? 1
+    const [fx, fy] = folliclePositions[targetIdx] ?? folliclePositions[DOMINANT_IDX]!
+    const [jx, jy] = EST_MULTI_SPREAD[i]!
+    return {
+      sx: fx + jx + OVARY_DX,
+      sy: fy + jy + OVARY_DY + ANATOMY_GROUP_Y,
+      ex: arriveX, ey: ARRIVE_Y,
+      r: EST_MULTI_RADII[i]!,
+      delay: EST_MULTI_DELAYS[i]!,
+    }
+  })
+}
+
+// Estrogen and progesterone from the dominant follicle / corpus luteum — one
+// source point, the dominant slot, fanning to slightly different arrival
+// points on the hypothalamus.
+const EST_DOM_ARRIVE_X = [700, 690, 710] as const
+const EST_DOM_DELAYS   = [0.0, 0.9, 1.8] as const
+const EST_DOM_RADII    = [10, 9, 10] as const
+const PROG_ARRIVE_X    = [700, 682, 718, 700] as const
+const PROG_DELAYS      = [0.0, 1.0, 2.0, 3.0] as const
+const PROG_RADII       = [11, 9, 10, 9] as const
+
+function buildFromDominant(
+  folliclePositions: readonly (readonly [number, number])[],
+  arriveXs: readonly number[],
+  radii: readonly number[],
+  delays: readonly number[],
+): Pt[] {
+  const [dx, dy] = folliclePositions[DOMINANT_IDX] ?? [845, 615]
+  return arriveXs.map((arriveX, i) => ({
+    sx: dx + OVARY_DX,
+    sy: dy + OVARY_DY + ANATOMY_GROUP_Y,
+    ex: arriveX, ey: ARRIVE_Y,
+    r: radii[i]!,
+    delay: delays[i]!,
+  }))
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function levelToOpacity(level: number): number {
@@ -291,6 +396,116 @@ function HormoneParticle({
   )
 }
 
+// ── GnRH pulse ────────────────────────────────────────────────────────────────
+// Hypothalamus bottom edge is y=56 (HYP_CY 42, ry 14), pituitary top edge is
+// y=76 (PIT_CY 94, PIT_R 18) — a 20px gap, previously just a static "↓"
+// glyph. GnRH is named 16+ times in the condition/transition copy with
+// nothing on screen to point at, so this draws the actual arrow and travels
+// a small dot along it on a discrete, non-flowing repeat: the whole point is
+// that it reads as pulses, not a stream, in contrast to the continuous
+// FSH/LH particle flights below.
+const GNRH_ARROW_TOP_Y = 58
+const GNRH_ARROW_BOT_Y = 74
+const GNRH_LABEL_X     = 706
+const GNRH_LABEL_Y     = 70
+const GNRH_COLOR       = 'rgba(148,112,175,0.9)'   // hypothalamus's own stroke family —
+                                                     // deliberately not a new hue, so this
+                                                     // doesn't read as a 5th legend colour
+                                                     // to hunt for in the hormone graph
+const GNRH_TRAVEL_DURATION = 0.45   // seconds for one dot to cross the gap
+
+// activity→interval is log-linear in a^EXPONENT, not linear in a. A plain
+// linear map puts POI (brainActivity 0.65–0.80, elevated because estrogen
+// feedback is absent) almost as fast as normal's 0.95 ovulatory peak —
+// visually claiming POI is the most hormonally active state on the site,
+// which is backwards. Raising a to a power >1 before the log-linear blend
+// compresses the low/mid range and stretches the top, so at EXPONENT=2.5 the
+// four conditions land where their own copy says they should:
+//   normal  0.4→0.95  2.35s baseline, 0.62s at the ovulatory peak (fastest)
+//   PCOS    ~0.75     ~1.2s, flat — "GnRH pulses are rapid", self-sustaining
+//   POI     0.65–0.80 1.4–1.6s — elevated, no estrogen/inhibin feedback
+//   FHA     0.16–0.25 ~2.7s — "slow and infrequent", the slowest of the four
+// Normal's peri-ovulatory peak stays the single fastest moment anywhere.
+const GNRH_MIN_INTERVAL      = 0.5   // fastest — normal's ovulatory-decision peak
+const GNRH_MAX_INTERVAL      = 2.8   // slowest — FHA's suppressed range
+const GNRH_INTERVAL_EXPONENT = 2.5
+
+function activityToInterval(activity: number): number {
+  const a = clamp(activity, 0, 1)
+  const ratio = GNRH_MIN_INTERVAL / GNRH_MAX_INTERVAL
+  const g = Math.pow(a, GNRH_INTERVAL_EXPONENT)
+  return GNRH_MAX_INTERVAL * Math.pow(ratio, g)
+}
+
+function GnRHPulse({ brainActivity, isFrozen }: { brainActivity: number; isFrozen: boolean }) {
+  const interval = activityToInterval(brainActivity)
+  const repeatDelay = Math.max(0, interval - GNRH_TRAVEL_DURATION)
+
+  // Unlike HormoneParticle's flight (mounted once, endpoints/duration fixed
+  // for the particle's lifetime), this loop's pacing is meant to track the
+  // CURRENT brainActivity as the user scrubs — so the effect below restarts
+  // the loop whenever repeatDelay changes, rather than mounting once. That
+  // means a scrub can visibly reset the dot to the top of its travel; that's
+  // an acceptable trade against a stale pulse rate, since it only happens
+  // while the user is actively dragging the timeline.
+  // x/y must be ABSOLUTE target coordinates on a <g>, not a delta animated
+  // on the circle's own cx/cy — framer's imperative animate() writes x/y as
+  // style.transform (translate), which composes with (doesn't replace) an
+  // SVG position attribute. Animating y:[58,74] directly on a <circle
+  // cy={58}> lands it at cy 58 PLUS a translateY of up to 74, i.e. y≈132,
+  // well past the pituitary. HormoneParticle avoids this by animating a <g>
+  // whose children sit at local origin — same fix here.
+  //
+  // Each keyframe array must have exactly as many entries as `times` below
+  // (4) — a 2-entry array with a 4-entry `times` isn't padded or
+  // interpolated, it silently jumps straight to the last value with no
+  // visible tween. x/y therefore hold-then-move-then-hold in the same
+  // shape as HormoneParticle's [sx, sx, ex, ex]: parked at the top while
+  // opacity ramps in, travel through the middle span, parked at the bottom
+  // while opacity ramps out.
+  const flightAnimate = useMemo(() => ({
+    x: [WIN_CX, WIN_CX, WIN_CX, WIN_CX],
+    y: [GNRH_ARROW_TOP_Y, GNRH_ARROW_TOP_Y, GNRH_ARROW_BOT_Y, GNRH_ARROW_BOT_Y],
+    opacity: [0, 1, 1, 0],
+  }), [])
+  const flightTransition = useMemo(() => ({
+    duration: GNRH_TRAVEL_DURATION,
+    repeat: Infinity,
+    repeatDelay,
+    times: [0, 0.15, 0.8, 1],
+    ease: 'easeInOut' as const,
+  }), [repeatDelay])
+
+  const [scope, animateImperative] = useAnimate<SVGGElement>()
+  const controlsRef = useRef<AnimationPlaybackControlsWithThen | null>(null)
+
+  // See HormoneParticle above for why this needs useAnimate's imperative
+  // controls rather than a declarative `animate` prop: only .pause()/.play()
+  // genuinely hold and resume an Infinity-repeat loop mid-flight.
+  useEffect(() => {
+    controlsRef.current?.stop()
+    controlsRef.current = animateImperative(scope.current, flightAnimate, flightTransition)
+    if (isFrozen) controlsRef.current.pause()
+    return () => controlsRef.current?.stop()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flightTransition])
+
+  useEffect(() => {
+    if (isFrozen) controlsRef.current?.pause()
+    else controlsRef.current?.play()
+  }, [isFrozen])
+
+  // opacity must stay a presentation attribute (not inline style) — framer's
+  // imperative animate() writes opacity via setAttribute on SVG elements,
+  // and an inline style would outrank it in the cascade and pin the dot
+  // invisible forever. See HormoneParticle's comment for the full story.
+  return (
+    <g ref={scope} transform={`translate(${WIN_CX}, ${GNRH_ARROW_TOP_Y})`} opacity={0}>
+      <circle r={3} fill={GNRH_COLOR} />
+    </g>
+  )
+}
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 type Props = {
   fshLevel:               number
@@ -299,26 +514,95 @@ type Props = {
   progesteroneLevel:      number
   dominantFollicleRadius: number
   corpusLuteumRadius:     number
+  smallFollicleCount:     number  // drives which FSH particles have a live target follicle
   stageIndex:             number
   isOnAnchor?:            boolean
   primaryHormoneByStage:  StagePrimaryHormones
   secondaryDim:           number
+  brainActivity:          number  // 0–1, drives GnRH pulse frequency
+  // Condition-specific follicle layout/FSH targeting (e.g. PCOS's ring +
+  // its fshTargetIndices). Omitted = AnatomyLayer's default scatter +
+  // DEFAULT_FSH_TARGETS. conditionId is used only to key the FSH particles
+  // so they remount (and pick up new endpoints) on a condition switch — see
+  // the framer-motion mount-once comment on HormoneParticle.
+  folliclePositions?:     readonly (readonly [number, number])[]
+  fshTargetIndices?:      readonly number[]
+  conditionId:            string
   onStructureClick?:      (id: string) => void
   isFrozen?:              boolean  // guided playback paused on a clicked structure
 }
 
 export default function BrainLayer({
   fshLevel, lhLevel, estrogenLevel, progesteroneLevel,
-  dominantFollicleRadius, corpusLuteumRadius, stageIndex,
+  dominantFollicleRadius, corpusLuteumRadius, smallFollicleCount, stageIndex,
   isOnAnchor = false,
   primaryHormoneByStage,
   secondaryDim,
+  brainActivity,
+  folliclePositions,
+  fshTargetIndices,
+  conditionId,
   onStructureClick,
   isFrozen = false,
 }: Props) {
   const primary: HormoneKey = primaryHormoneByStage[stageIndex] ?? primaryHormoneByStage[0]
 
-  const fshScale  = primary === 'fsh'          ? 1.0 : secondaryDim
+  const activeFolliclePositions = folliclePositions ?? FOLLICLE_POSITIONS
+  const activeFshTargets = fshTargetIndices ?? DEFAULT_FSH_TARGETS
+  const fshPts = useMemo(
+    () => buildFshPoints(activeFolliclePositions, activeFshTargets),
+    [activeFolliclePositions, activeFshTargets],
+  )
+
+  // The estrogen-producing cohort: the condition's own FSH targets minus the
+  // dominant slot (the dominant follicle has its own dedicated pool below, so
+  // including it here would double up on one point).
+  const estCohortIndices = useMemo(
+    () => {
+      const rest = activeFshTargets.filter((i) => i !== DOMINANT_IDX)
+      return rest.length > 0 ? rest : [DOMINANT_IDX]
+    },
+    [activeFshTargets],
+  )
+  const lhPts = useMemo(() => buildLhPoints(activeFolliclePositions), [activeFolliclePositions])
+  const estMultiPts = useMemo(
+    () => buildEstMultiPoints(activeFolliclePositions, estCohortIndices),
+    [activeFolliclePositions, estCohortIndices],
+  )
+  const estDomPts = useMemo(
+    () => buildFromDominant(activeFolliclePositions, EST_DOM_ARRIVE_X, EST_DOM_RADII, EST_DOM_DELAYS),
+    [activeFolliclePositions],
+  )
+  const progPts = useMemo(
+    () => buildFromDominant(activeFolliclePositions, PROG_ARRIVE_X, PROG_RADII, PROG_DELAYS),
+    [activeFolliclePositions],
+  )
+
+  // Gate each FSH particle's opacity on whether its target follicle actually
+  // exists, so particles stop streaming into empty stroma once a follicle
+  // has regressed (or hasn't grown yet). The non-dominant branch reuses the
+  // EXACT SAME `smallFollicleCount - targetIdx` fraction AnatomyLayer uses
+  // to fade a follicle's own scale/opacity (FolliclesGroup), so a particle's
+  // presence tracks its follicle's actual fade in/out timing, not an
+  // independently-tuned approximation.
+  function fshPresence(targetIdx: number): number {
+    return targetIdx === DOMINANT_IDX
+      ? clamp((dominantFollicleRadius - 0.05) / 0.05, 0, 1)
+      : clamp(smallFollicleCount - targetIdx, 0, 1)
+  }
+
+  // FSH gets a higher secondary-stage floor than the generic secondaryDim
+  // (0.20 for Normal). At cycle-end→recruitment, FSH is already genuinely
+  // rising (fshLevel ~0.25, climbing toward ~0.65) but progesterone is the
+  // spotlighted stage hormone, so the old flat 0.20 multiplier crushed that
+  // real signal to near-invisible — then jumped 5x the instant the
+  // recruitment anchor flipped `primary` to 'fsh'. Reads as "does nothing,
+  // then suddenly appears" instead of the gradual pre-recruitment rise it
+  // should show. 0.5 keeps FSH clearly secondary to whichever hormone IS
+  // spotlighted, while staying visible throughout — including later
+  // non-primary stages, which is an intentional side effect, not scoped to
+  // only the opening stage.
+  const fshScale  = primary === 'fsh'          ? 1.0 : Math.max(secondaryDim, 0.5)
   const estScale  = primary === 'estrogen'     ? 1.0 : secondaryDim
   const progScale = primary === 'progesterone' ? 1.0 : secondaryDim
 
@@ -452,10 +736,22 @@ export default function BrainLayer({
           Hypothalamus
         </text>
 
-        {/* Connector */}
-        <text x={WIN_CX} y={71} textAnchor="middle" fontSize="13"
-          fill="rgba(140,105,125,0.55)"
-          fontFamily="var(--font-fredoka), sans-serif" style={{ pointerEvents: 'none', userSelect: 'none' }}>↓</text>
+        {/* Connector — drawn arrow + "GnRH" label, not dimmed by the
+            particle wrapper below: this is labeling the causal chain
+            (hypothalamus → GnRH → pituitary → FSH/LH), not particle noise,
+            so it stays legible even when the user is settled on an anchor. */}
+        <g style={{ pointerEvents: 'none' }}>
+          <line x1={WIN_CX} y1={GNRH_ARROW_TOP_Y} x2={WIN_CX} y2={GNRH_ARROW_BOT_Y - 6}
+            stroke={GNRH_COLOR} strokeWidth={1.5} />
+          <path d={`M${WIN_CX - 4} ${GNRH_ARROW_BOT_Y - 8} L${WIN_CX} ${GNRH_ARROW_BOT_Y} L${WIN_CX + 4} ${GNRH_ARROW_BOT_Y - 8} Z`}
+            fill={GNRH_COLOR} />
+          <text x={GNRH_LABEL_X} y={GNRH_LABEL_Y} textAnchor="start" fontSize="9" fontWeight="600"
+            fill={GNRH_COLOR}
+            fontFamily="var(--font-fredoka), sans-serif" style={{ userSelect: 'none' }}>
+            GnRH
+          </text>
+          <GnRHPulse brainActivity={brainActivity} isFrozen={isFrozen} />
+        </g>
 
         {/* Pituitary glow ring */}
         <motion.g initial={{ opacity: 0 }} animate={{ opacity: pitGlowOp }} transition={{ duration: 0.5 }}>
@@ -496,22 +792,31 @@ export default function BrainLayer({
       >
 
         {/* ── FSH particles: pituitary → follicle ring (fan) ─────────────── */}
-        {FSH_PTS.map((p, i) => (
-          <HormoneParticle key={`fsh-${i}`} p={p}
-            opacity={particleOp(fshLevel, fshScale, i, FSH_PTS.length)}
-            duration={4.5} ease="easeIn" peakOpacity={0.88}
-            bodyGradient="hormoneBodyFsh" glowGradient="hormoneGlowFsh"
-            variantIndex={i} hiliteColor={C_FSH_HILITE} shadowColor={C_FSH_DARK}
-            isOnAnchor={isOnAnchor} isFrozen={isFrozen} />
-        ))}
+        {/* key includes conditionId so switching conditions REMOUNTS these
+            particles rather than reusing them: HormoneParticle starts its
+            flight loop in a mount-only effect (deps []) and memoizes the
+            animation on `p`, so an in-place endpoint change would silently
+            keep flying to the OLD condition's coordinates. See
+            HormoneParticle's own comment for the full mount-once story. */}
+        {fshPts.map((p, i) => {
+          const targetIdx = activeFshTargets[i] ?? i
+          return (
+            <HormoneParticle key={`fsh-${conditionId}-${i}`} p={p}
+              opacity={particleOp(fshLevel, fshScale, i, fshPts.length) * fshPresence(targetIdx)}
+              duration={4.5} ease="easeIn" peakOpacity={0.88}
+              bodyGradient="hormoneBodyFsh" glowGradient="hormoneGlowFsh"
+              variantIndex={i} hiliteColor={C_FSH_HILITE} shadowColor={C_FSH_DARK}
+              isOnAnchor={isOnAnchor} isFrozen={isFrozen} />
+          )
+        })}
 
         {/* ── LH particles: pituitary → dominant follicle (focused) ────────── */}
         {/* Smaller glow multiplier: these 4 particles converge into a ~17px
             cluster at the dominant follicle, so the default 1.6× radius would
             merge into a smudge rather than a readable hot spot. */}
-        {LH_PTS.map((p, i) => (
-          <HormoneParticle key={`lh-${i}`} p={p}
-            opacity={particleOp(lhLevel, lhScale, i, LH_PTS.length)}
+        {lhPts.map((p, i) => (
+          <HormoneParticle key={`lh-${conditionId}-${i}`} p={p}
+            opacity={particleOp(lhLevel, lhScale, i, lhPts.length)}
             duration={3.5} ease="easeIn" peakOpacity={0.94}
             bodyGradient="hormoneBodyLh" glowGradient="hormoneGlowLh"
             glowRadiusMult={1.35}
@@ -519,10 +824,15 @@ export default function BrainLayer({
             isOnAnchor={isOnAnchor} isFrozen={isFrozen} />
         ))}
 
-        {/* ── Estrogen from multiple follicles (early cycle) ──────────────── */}
-        {EST_MULTI_PTS.map((p, i) => (
-          <HormoneParticle key={`em-${i}`} p={p}
-            opacity={estBase * estMultiW * particleGate(estrogenLevel, i, EST_MULTI_PTS.length)}
+        {/* ── Estrogen from the wider follicle cohort (early cycle) ────────── */}
+        {/* Gated on the source follicle actually being present, same as FSH —
+            otherwise estrogen streams out of empty stroma in the conditions
+            with only a couple of follicles (POI) or once the cohort has
+            regressed (normal, past the dominant anchor). */}
+        {estMultiPts.map((p, i) => (
+          <HormoneParticle key={`em-${conditionId}-${i}`} p={p}
+            opacity={estBase * estMultiW * particleGate(estrogenLevel, i, estMultiPts.length)
+                     * fshPresence(estCohortIndices[i % estCohortIndices.length] ?? 1)}
             duration={4.5} ease="easeOut" peakOpacity={0.80}
             bodyGradient="hormoneBodyEst" glowGradient="hormoneGlowEst"
             variantIndex={i} hiliteColor={C_EST_HILITE} shadowColor={C_EST_DARK}
@@ -530,9 +840,9 @@ export default function BrainLayer({
         ))}
 
         {/* ── Estrogen from dominant follicle / CL ─────────────────────────── */}
-        {EST_DOM_PTS.map((p, i) => (
-          <HormoneParticle key={`ed-${i}`} p={p}
-            opacity={estBase * estDomW * particleGate(estrogenLevel, i, EST_DOM_PTS.length)}
+        {estDomPts.map((p, i) => (
+          <HormoneParticle key={`ed-${conditionId}-${i}`} p={p}
+            opacity={estBase * estDomW * particleGate(estrogenLevel, i, estDomPts.length)}
             duration={4.5} ease="easeOut" peakOpacity={0.84}
             bodyGradient="hormoneBodyEst" glowGradient="hormoneGlowEst"
             variantIndex={i + 1} hiliteColor={C_EST_HILITE} shadowColor={C_EST_DARK}
@@ -540,9 +850,9 @@ export default function BrainLayer({
         ))}
 
         {/* ── Progesterone from CL → hypothalamus ──────────────────────────── */}
-        {PROG_PTS.map((p, i) => (
-          <HormoneParticle key={`prog-${i}`} p={p}
-            opacity={levelToOpacity(progesteroneLevel) * progScale * particleGate(progesteroneLevel, i, PROG_PTS.length)}
+        {progPts.map((p, i) => (
+          <HormoneParticle key={`prog-${conditionId}-${i}`} p={p}
+            opacity={levelToOpacity(progesteroneLevel) * progScale * particleGate(progesteroneLevel, i, progPts.length)}
             duration={4.8} ease="easeOut" peakOpacity={0.84}
             bodyGradient="hormoneBodyProg" glowGradient="hormoneGlowProg"
             variantIndex={i} hiliteColor={C_PROG_HILITE} shadowColor={C_PROG_DARK}

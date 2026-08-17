@@ -41,6 +41,13 @@
   --hormone-lh-text:           #a43b49;
   --hormone-estrogen-text:     #ae5e16;
   --hormone-progesterone-text: #366954;
+  /* GnRH isn't a hormone-graph line (no particle colour to darken from), so
+     this is derived directly from the hypothalamus's own stroke colour
+     (rgba(148,112,175) in BrainLayer.tsx) instead — darkened/desaturated
+     just enough to clear 4.5:1 against both card backgrounds (measured
+     ~5.9:1 on #FFF7F8, ~6.1:1 on --surface #fefcfa) while staying visibly
+     the same muted violet family as the canvas arrow, not a new hue. */
+  --hormone-gnrh-text:         #6f5590;
 
   /* ---- Site design tokens (marketing pages: Home, Purpose, Model shell, Sources) ---- */
   /* Backgrounds */

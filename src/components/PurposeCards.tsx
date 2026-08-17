@@ -64,23 +64,23 @@ function InfoCard({
 export default function PurposeCards() {
   return (
     <div className={styles.cardsRow}>
-      <InfoCard heading="Created by women, for women" iconSrc="/purpose-icon-created.png">
-        For those struggling with the beginning of a new cycle, amenorrhea, PCOS, endometriosis,
-        and more, or simply seeking to gain a better understanding of their body. Reliable
-        information, support, and grace is not always easily accessible. Moreover, it can be
-        incredibly difficult to discover comprehensible sources without fears of shame and
-        belittlement. This simulation is meant to provide baseline knowledge and help connect the
-        dots behind a period. Ultimately, the knowledge serves as a tool of empowerment;
-        empowerment and the ability to advocate for yourself.
+      <InfoCard heading="Created by a woman, for women" iconSrc="/purpose-icon-created.png">
+        For those struggling with the beginning of a new cycle, amenorrhea, PCOS, primary ovarian
+        insufficiency, and more, or simply seeking to gain a better understanding of their body.
+        Reliable information, support, and grace are not always easily accessible. Moreover, it
+        can be incredibly difficult to discover comprehensible sources without fears of shame and
+        belittlement. Built by a high school student, this simulation is meant to provide baseline
+        knowledge and help connect the dots behind a period. Ultimately, the knowledge serves as a
+        tool of empowerment; empowerment and the ability to advocate for yourself.
       </InfoCard>
       <InfoCard heading="Mechanism over memorization" iconSrc="/purpose-icon-mechanism.png">
-        Most menstrual health resources teach &ldquo;ovulation happens on day 14&rdquo;. Although
-        equally as important, this simulation focuses on <u>why</u> ovulation happens: through the
-        orderly sequence of hormonal signals and biological states that drive its chain of events.
-        Cycle timing varies between individuals and across life circumstances, therefore
-        understanding the mechanism makes that variability easier to digest and seek help if
-        needed. Additionally, the extenuating circumstances that can cause an abnormal menstrual
-        cycle are also explored.
+        Most menstrual health resources teach &ldquo;ovulation happens on day 14.&rdquo; That
+        timing is important too, but this simulation focuses on <u>why</u> ovulation happens:
+        through the orderly sequence of hormonal signals and biological states that drive its
+        chain of events. Cycle timing varies between individuals and across life circumstances;
+        therefore, understanding the mechanism makes that variability easier to digest, and makes
+        it clearer when to seek help. Additionally, the extenuating circumstances that can cause
+        an abnormal menstrual cycle are also explored.
       </InfoCard>
     </div>
   )

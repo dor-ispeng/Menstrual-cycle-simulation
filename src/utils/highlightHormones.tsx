@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 // see the --hormone-*-text tokens in globals.css for why these are separate
 // from --signal-*/BrainLayer's colours rather than reused.
 const HORMONE_COLOR_VAR: Record<string, string> = {
+  gnrh: 'var(--hormone-gnrh-text)',
   fsh: 'var(--hormone-fsh-text)',
   lh: 'var(--hormone-lh-text)',
   estrogen: 'var(--hormone-estrogen-text)',
@@ -14,11 +15,11 @@ const HORMONE_COLOR_VAR: Record<string, string> = {
 // text is always rendered verbatim (never re-cased) below. Hyphens and
 // apostrophes aren't word characters, so \b already does the right thing at
 // "LH-to-FSH", "FSH-sensitive", "unopposed-estrogen", and "estrogen's"
-// (including the typographic ’) without any extra handling. "GnRH" is never
-// matched — not special-cased, just genuinely doesn't contain "LH" as a
-// substring — so it stays uncoloured, which is correct: it has no particle
-// colour of its own.
-const HORMONE_PATTERN = /\b(FSH|LH|estrogen|progesterone)\b/gi
+// (including the typographic ’) without any extra handling. GnRH is listed
+// first in the alternation, ahead of LH, purely for readability — it has
+// its own leading \b, so it can't be shadowed by LH's match regardless of
+// order.
+const HORMONE_PATTERN = /\b(GnRH|FSH|LH|estrogen|progesterone)\b/gi
 
 // Wraps hormone names in coloured spans matching their particle colour, so
 // "estrogen" in a sentence visually links to the orange particles (etc).

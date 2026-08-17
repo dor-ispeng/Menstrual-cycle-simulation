@@ -17,7 +17,7 @@ export const structures: Structure[] = [
       },
       'recruitment': {
         title: 'Brain and Pituitary',
-        whatIsHappening: 'GnRH stimulates the pituitary to release FSH.',
+        whatIsHappening: 'GnRH (gonadotropin-releasing hormone) pulses from the hypothalamus stimulate the pituitary to release FSH.',
         whyItMatters: 'FSH recruits a new group of follicles.',
       },
       'competition': {

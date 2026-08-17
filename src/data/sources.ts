@@ -64,10 +64,10 @@ export const supportItems: SupportEntry[] = [
     url: 'https://www.iapmd.org/',
   },
   {
-    name: 'RESOLVE: The National Infertility Association',
-    focus: 'Fertility & Amenorrhea',
-    desc: 'Offers free peer-led support groups, educational resources, and advocacy for individuals experiencing infertility and ovulatory disorders, including some causes of amenorrhea.',
-    url: 'https://resolve.org/',
+    name: 'Daisy Network',
+    focus: 'POI',
+    desc: 'A nonprofit supporting people affected by primary ovarian insufficiency through educational resources, peer communities, online support groups, and counseling, while also promoting awareness and research.',
+    url: 'https://daisynetwork.org',
   },
   {
     name: 'Anxiety and Depression Association of America (ADAA)',

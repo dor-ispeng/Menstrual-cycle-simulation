@@ -82,4 +82,11 @@ export type Condition = {
   // FOLLICLE_POSITIONS (index 0 is the persistent dominant candidate slot,
   // 1–11 are recruited follicles). Omitted = the default layout.
   folliclePositions?: readonly (readonly [number, number])[]
+  // Which FOLLICLE_POSITIONS/folliclePositions index each of the 6 FSH
+  // particles targets (BrainLayer's FSH_PTS, in array order). Omitted =
+  // [0,1,2,3,4,5] — the natural default-scatter mapping. PCOS overrides this
+  // because its folliclePositions is a peripheral ring: with the default
+  // mapping, all 6 particles would target consecutive ring positions and
+  // bunch along one arc instead of fanning across the follicle field.
+  fshTargetIndices?: readonly number[]
 }

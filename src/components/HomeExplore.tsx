@@ -80,7 +80,15 @@ export default function HomeExplore() {
             alt="Diagram of hormone signaling between the brain and ovaries"
             fill
             quality={100}
-            style={{ objectFit: 'contain', objectPosition: 'center 46%' }}
+            // The source image (244×332, portrait) is height-constrained under
+            // contain fit inside this square frame, so it renders at ~458.8px
+            // against the frame's 459px — a sub-pixel shortfall of well under
+            // 1px. At the old 'center 46%' that residual gets split ~46/54
+            // between top and bottom, which rounds to a hairline gap at the
+            // top in some browsers. 0% pins the image flush to the top per
+            // the object-position spec, pushing that same negligible slack
+            // entirely to the bottom edge instead, where it's never visible.
+            style={{ objectFit: 'contain', objectPosition: 'center 0%' }}
           />
         </div>
       </div>
