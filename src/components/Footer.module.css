@@ -34,3 +34,34 @@
   line-height: 1.55;
   color: var(--site-heading-rose);
 }
+
+/* Attribution block — left-aligned against the page edge, beneath the
+   centred KEY NOTE. `.band` sets text-align:center for its children, so this
+   has to opt back out explicitly. It shares .band's horizontal padding by
+   living inside it, which keeps its left edge flush with the rest of the
+   site's content gutter rather than jammed against the viewport. */
+.attribution {
+  text-align: left;
+  margin: 18px auto 0;
+  max-width: 900px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(180, 92, 105, 0.22);
+}
+
+.attributionName {
+  font-family: var(--font-fredoka), sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--site-heading-rose);
+  margin: 0 0 3px;
+}
+
+.attributionDesc {
+  font-family: var(--font-quicksand), sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--site-heading-rose);
+  opacity: 0.85;
+  margin: 0;
+  max-width: 620px;
+}

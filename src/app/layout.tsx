@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Fredoka, Quicksand } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -39,7 +40,13 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${fredoka.variable} ${quicksand.variable} antialiased`}
     >
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Vercel Analytics — reports only from the deployed site; a local
+            dev/production server sends nothing, so an empty dashboard while
+            testing on localhost is expected, not a misconfiguration. */}
+        <Analytics />
+      </body>
     </html>
   );
 }

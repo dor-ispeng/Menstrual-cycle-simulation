@@ -13,6 +13,17 @@ export default function Footer() {
             are simplified and may not be anatomically precise; hormone levels and cycle timing
             vary between individuals.
           </p>
+
+          {/* Attribution — left-aligned, appears on every page that renders
+              Footer (Home, Purpose, Sources). The Model page has no Footer by
+              design: it's a full-viewport canvas with its own timeline bar. */}
+          <div className={styles.attribution}>
+            <p className={styles.attributionName}>Created and developed by Doris Peng</p>
+            <p className={styles.attributionDesc}>
+              An independent educational project exploring menstrual-cycle physiology through
+              interactive computational modeling.
+            </p>
+          </div>
         </div>
       </div>
     </footer>
