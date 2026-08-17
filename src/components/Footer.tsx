@@ -21,7 +21,7 @@ export default function Footer() {
             <p className={styles.attributionName}>Created and developed by Doris Peng</p>
             <p className={styles.attributionDesc}>
               An independent educational project exploring menstrual-cycle physiology through
-              interactive computational modeling.
+              interactive modeling.
             </p>
           </div>
         </div>

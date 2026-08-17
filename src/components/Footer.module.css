@@ -35,15 +35,18 @@
   color: var(--site-heading-rose);
 }
 
-/* Attribution block — left-aligned against the page edge, beneath the
-   centred KEY NOTE. `.band` sets text-align:center for its children, so this
-   has to opt back out explicitly. It shares .band's horizontal padding by
-   living inside it, which keeps its left edge flush with the rest of the
-   site's content gutter rather than jammed against the viewport. */
+/* Attribution block — flush with the PAGE gutter, not with the KEY NOTE text
+   column. `.band`'s own horizontal padding is clamp(20px, 5vw, 48px), the
+   same value the Home/Purpose/Sources sections use, so a full-width child
+   here lands on exactly the gutter that "What You'll Explore" and the other
+   section headings sit on (48px at desktop widths).
+   Two things this must NOT inherit: `.band` sets text-align:center, and the
+   sibling `.body` is a 900px-max centred column — matching either of those
+   would pull this back toward the middle of the page. Hence the explicit
+   text-align and the deliberate absence of max-width / margin:auto. */
 .attribution {
   text-align: left;
-  margin: 18px auto 0;
-  max-width: 900px;
+  margin: 18px 0 0;
   padding-top: 14px;
   border-top: 1px solid rgba(180, 92, 105, 0.22);
 }
