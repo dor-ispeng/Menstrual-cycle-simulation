@@ -80,7 +80,7 @@ export default function TimelineBar() {
       style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)', fontFamily: 'var(--font-fredoka), sans-serif' }}
     >
       {/* Current event label */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-1">
         <p className="font-semibold" style={{ color: 'var(--accent)', fontSize: 14, lineHeight: '13.6px' }}>
           {currentAnchor.title}
         </p>

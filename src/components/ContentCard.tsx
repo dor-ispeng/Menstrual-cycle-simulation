@@ -38,7 +38,7 @@ export default function ContentCard() {
         className="z-30 rounded-2xl shadow-lg"
         style={{
           position: 'fixed',
-          bottom: 112,
+          bottom: 128,
           left: 24,
           width: 400,
           background: '#FFF7F8',
@@ -154,7 +154,7 @@ export default function ContentCard() {
       className="z-30 w-72 rounded-2xl p-4 shadow-lg"
       style={{
         position: 'fixed',
-        bottom: 112,
+        bottom: 128,
         left: 24,
         background: 'var(--surface)',
         border: '1px solid var(--border)',
