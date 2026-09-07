@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import styles from './Footer.module.css'
 
 export default function Footer() {
@@ -22,6 +23,15 @@ export default function Footer() {
             <p className={styles.attributionDesc}>
               An independent educational project exploring menstrual-cycle physiology through
               interactive modeling.
+            </p>
+            {/* Legal links live in the footer by convention — it's where people
+                look for them, and it keeps the 4-item nav uncluttered. The Model
+                page renders no Footer, so TimelineBar carries its own copy of
+                these links. */}
+            <p className={styles.attributionLinks}>
+              <Link href="/privacy" className={styles.attributionLink}>Privacy Policy</Link>
+              <span aria-hidden="true" className={styles.attributionSep}>·</span>
+              <Link href="/terms" className={styles.attributionLink}>Terms of Use</Link>
             </p>
           </div>
         </div>

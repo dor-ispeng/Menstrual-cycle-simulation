@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useCallback } from 'react'
+import Link from 'next/link'
 import { useSimulationStore } from '@/store/simulation'
 import { anchors } from '@/data/anchors'
 import { clamp } from '@/utils/interpolate'
@@ -89,6 +90,29 @@ export default function TimelineBar() {
             {Math.round(progress * 100)}%
           </span>
         </p>
+      </div>
+
+      {/* Persistent disclaimer. The model page renders no Footer (it's a
+          full-viewport canvas), so this bar is the only always-visible
+          surface on the page a user actually reads health information from.
+          The full KEY NOTE text still lives on the canvas below the anatomy,
+          but that requires dragging to reach — a disclaimer the reader has to
+          go looking for is not a conspicuous one. This line needs no
+          interaction to be seen, which is the whole point; it also carries
+          the Privacy/Terms links, since the Footer that holds them elsewhere
+          never renders here. */}
+      <div
+        className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2"
+        style={{ fontSize: 11, lineHeight: '12px', color: 'var(--text-muted)' }}
+      >
+        <span>Educational model — not medical advice.</span>
+        <span aria-hidden="true">·</span>
+        <Link href="/privacy" style={{ color: 'var(--site-heading-rose-dark)', textDecoration: 'underline' }}>
+          Privacy
+        </Link>
+        <Link href="/terms" style={{ color: 'var(--site-heading-rose-dark)', textDecoration: 'underline' }}>
+          Terms
+        </Link>
       </div>
 
       {/* Track */}

@@ -59,6 +59,27 @@
   margin: 0 0 3px;
 }
 
+/* Underlined, not colour-only: relying on hue alone to signal a link fails
+   WCAG 1.4.1 and is invisible to colour-blind readers. Uses the darkest rose
+   token available so these sit better against the footer band than the
+   surrounding --site-heading-rose body copy does. */
+.attributionLinks {
+  font-family: var(--font-quicksand), sans-serif;
+  font-size: 12px;
+  margin: 8px 0 0;
+}
+
+.attributionLink {
+  color: var(--site-heading-rose-dark);
+  text-decoration: underline;
+}
+
+.attributionSep {
+  color: var(--site-heading-rose-dark);
+  opacity: 0.55;
+  margin: 0 8px;
+}
+
 .attributionDesc {
   font-family: var(--font-quicksand), sans-serif;
   font-size: 12px;
