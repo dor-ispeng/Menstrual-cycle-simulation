@@ -11,7 +11,7 @@ Key Features:
 - Multiple conditions including PCOS, POI, FHA
 
 Technology Used:
-Next.js, TypeScript, Framer Motion, Figma/SVG, Vercel
+Next.js, TypeScript, Framer Motion, Figma/SVG, Vercel, Canva
 
 AI such as Claude Code, Claude Design, and ChatGPT was utilized and essential to the development of this website. 
 
